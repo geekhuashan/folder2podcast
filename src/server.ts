@@ -1,11 +1,13 @@
 import fastify, { FastifyInstance } from 'fastify';
 import fastifyStatic from '@fastify/static';
 import path from 'path';
-import { ProcessOptions, PodcastSource } from './types';
-import { processPodcastSource } from './utils/scanner';
-import { generateFeed, getFeedStoragePath } from './utils/feed';
 import { getEnvConfig } from './utils/env';
-import fs from 'fs-extra';
+import { ConfigService } from './services/config.service';
+import { PodcastService } from './services/podcast.service';
+import { FeedService } from './services/feed.service';
+import { errorHandler } from './middleware/error.middleware';
+import { registerApiRoutes } from './routes/api.routes';
+import { registerFeedRoutes } from './routes/feed.routes';
 
 // 设置默认封面路径为assets中的图片
 const DEFAULT_COVER = '/image/default-cover.png';
@@ -13,162 +15,115 @@ const DEFAULT_COVER = '/image/default-cover.png';
 export class PodcastServer {
     private server: FastifyInstance;
     private audioDir: string;
-    private sources: Map<string, PodcastSource> = new Map();
     private baseUrl: string;
     private port: number;
+
+    // 服务实例
+    private configService: ConfigService;
+    private podcastService: PodcastService;
+    private feedService: FeedService;
 
     constructor(audioDir: string, port: number) {
         this.audioDir = path.resolve(audioDir);
         this.port = port;
         const config = getEnvConfig();
         this.baseUrl = config.BASE_URL;
+
         this.server = fastify({
             logger: true
         });
+
+        // 创建服务实例 (直接实例化,不使用依赖注入)
+        this.configService = new ConfigService();
+        this.podcastService = new PodcastService();
+        this.feedService = new FeedService();
     }
 
-    private formatPodcastInfo(source: PodcastSource): string {
-        const episodeCount = source.episodes.length;
-        const coverInfo = source.coverPath ? '✓' : '✗';
-
-        return `
-  ${source.config.title}
-  ├── 描述: ${source.config.description}
-  ├── 作者: ${source.config.author}
-  ├── 语言: ${source.config.language}
-  ├── 封面: ${coverInfo}
-  ├── 剧集数: ${episodeCount}
-  ├── 文件夹名: ${source.dirName}
-  └── RSS地址: ${this.baseUrl}/feeds/${encodeURIComponent(source.dirName)}.xml`;
-    }
-
-    private displayPodcastList(): void {
-        if (this.sources.size === 0) {
-            console.log('\n未发现任何播客源！请确保音频文件夹结构正确。');
-            return;
-        }
-
-        console.log('\n发现以下播客源:');
-        console.log('='.repeat(50));
-
-        for (const source of this.sources.values()) {
-            console.log(this.formatPodcastInfo(source));
-            console.log('='.repeat(50));
-        }
-
-        console.log(`\n总共发现 ${this.sources.size} 个播客源`);
-        console.log(`服务器地址: ${this.baseUrl}`);
-        console.log('播客列表API: /podcasts\n');
-    }
-
-    private async processSources(): Promise<void> {
-        // 清空现有源
-        this.sources.clear();
-
-        // 扫描并处理所有播客源
-        const dirs = await this.scanPodcastDirs();
-        for (const dir of dirs) {
-            const source = await processPodcastSource(
-                path.join(this.audioDir, dir)
-            );
-            this.sources.set(dir, source);
-
-            // 生成并保存feed文件到新的存储位置
-            const feed = await generateFeed(source, {
-                baseUrl: this.baseUrl,
-                defaultCover: `${this.baseUrl}${DEFAULT_COVER}`
-            });
-            const feedPath = getFeedStoragePath(source);
-            await this.saveFeed(feedPath, feed);
-        }
-
-        // 显示更新后的播客列表
-        this.displayPodcastList();
-    }
-
+    /**
+     * 初始化服务器
+     */
     public async initialize(): Promise<void> {
         try {
-            // 注册静态文件服务中间件 - 处理静态资源
+            // 注册错误处理中间件
+            this.server.setErrorHandler(errorHandler);
+
+            // 注册静态文件服务 - assets (Web界面和图片资源)
             await this.server.register(fastifyStatic, {
                 root: path.join(__dirname, '../assets'),
                 prefix: '/',
                 decorateReply: false
             });
 
-            // 注册feed文件的静态服务
-            const feedsDir = path.join(process.cwd(), '.feeds');
-            await fs.ensureDir(feedsDir);
-            await this.server.register(fastifyStatic, {
-                root: feedsDir,
-                prefix: '/feeds/',
-                decorateReply: false
-            });
-
-            // 注册音频文件的静态服务
+            // 注册静态文件服务 - audio (音频文件)
             await this.server.register(fastifyStatic, {
                 root: this.audioDir,
                 prefix: '/audio/',
                 decorateReply: false
             });
 
-            // 处理所有播客源
-            await this.processSources();
+            // 注册 API 路由
+            await registerApiRoutes(this.server, this.podcastService);
 
-            // API路由: 获取所有播客列表
-            this.server.get('/podcasts', async () => {
-                const podcasts = Array.from(this.sources.values()).map(source => ({
-                    title: source.config.title,
-                    description: source.config.description,
-                    dirName: source.dirName,
-                    coverUrl: source.coverPath
-                        ? `/audio/${encodeURIComponent(source.dirName)}/cover.jpg`
-                        : DEFAULT_COVER,
-                    feedUrl: `/feeds/${encodeURIComponent(source.dirName)}.xml`,
-                    episodeCount: source.episodes.length,
-                    latestEpisodeDate: source.episodes.length > 0
-                        ? source.episodes[source.episodes.length - 1].pubDate
-                        : null
-                }));
-                return { podcasts };
-            });
+            // 注册 Feed 路由
+            await registerFeedRoutes(this.server, this.podcastService, this.feedService);
 
             // 添加根路径重定向
             this.server.get('/', async (request, reply) => {
                 return reply.redirect('/web/index.html');
             });
+
+            // 显示启动信息
+            await this.displayStartupInfo();
         } catch (error) {
-            this.server.log.error('Error processing podcast sources:', error);
+            this.server.log.error('Error initializing server:', error);
             throw error;
         }
     }
 
-    private async scanPodcastDirs(): Promise<string[]> {
-        const { readdir, stat } = await import('fs/promises');
-        const entries = await readdir(this.audioDir);
-        const dirs = [];
+    /**
+     * 显示启动信息
+     */
+    private async displayStartupInfo(): Promise<void> {
+        try {
+            const podcasts = await this.podcastService.scanAllPodcasts();
 
-        for (const entry of entries) {
-            const fullPath = path.join(this.audioDir, entry);
-            try {
-                const stats = await stat(fullPath);
-                if (stats.isDirectory()) {
-                    dirs.push(entry);
-                }
-            } catch (error) {
-                this.server.log.warn(`Failed to stat ${entry}:`, error);
-                continue;
+            if (podcasts.length === 0) {
+                console.log('\n未发现任何播客源!请确保音频文件夹结构正确。');
+                return;
             }
+
+            console.log('\n发现以下播客源:');
+            console.log('='.repeat(50));
+
+            for (const podcast of podcasts) {
+                const episodeCount = podcast.episodes.length;
+                const coverInfo = podcast.coverPath ? '✓' : '✗';
+
+                console.log(`
+  ${podcast.config.title}
+  ├── 描述: ${podcast.config.description}
+  ├── 作者: ${podcast.config.author}
+  ├── 语言: ${podcast.config.language}
+  ├── 封面: ${coverInfo}
+  ├── 剧集数: ${episodeCount}
+  ├── 文件夹名: ${podcast.dirName}
+  └── RSS地址: ${this.baseUrl}/feeds/${encodeURIComponent(podcast.dirName)}.xml`);
+                console.log('='.repeat(50));
+            }
+
+            console.log(`\n总共发现 ${podcasts.length} 个播客源`);
+            console.log(`服务器地址: ${this.baseUrl}`);
+            console.log('API端点:');
+            console.log('  - V2 API: /api/v2/podcasts');
+            console.log('  - V1 兼容: /podcasts\n');
+        } catch (error) {
+            this.server.log.error('Error displaying startup info:', error);
         }
-
-        return dirs;
     }
 
-    private async saveFeed(feedPath: string, feed: string): Promise<void> {
-        const feedDir = path.dirname(feedPath);
-        await fs.ensureDir(feedDir);  // 确保目录存在
-        await fs.writeFile(feedPath, feed, 'utf-8');
-    }
-
+    /**
+     * 启动服务器
+     */
     public async start(): Promise<void> {
         try {
             const address = await this.server.listen({
@@ -182,20 +137,24 @@ export class PodcastServer {
         }
     }
 
+    /**
+     * 停止服务器
+     */
     public async stop(): Promise<void> {
         await this.server.close();
     }
 
+    /**
+     * 获取音频目录路径
+     */
     public get audioDirectory(): string {
         return this.audioDir;
     }
 
-    public async reprocessSources(): Promise<void> {
-        try {
-            await this.processSources();
-        } catch (error) {
-            this.server.log.error('Error reprocessing podcast sources:', error);
-            throw error;
-        }
+    /**
+     * 获取 FeedService 实例 (用于 watcher 清除缓存)
+     */
+    public get feed(): FeedService {
+        return this.feedService;
     }
 }

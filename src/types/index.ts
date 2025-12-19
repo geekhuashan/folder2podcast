@@ -35,7 +35,56 @@ export interface PodcastSource {
     coverPath?: string;
 }
 
+// V2 版本的 PodcastSource (使用 V2 配置)
+export interface PodcastSourceV2 {
+    dirName: string;
+    dirPath: string;
+    config: PodcastConfigV2Full;
+    episodes: Episode[];
+    coverPath?: string;
+}
+
 export interface ProcessOptions {
     baseUrl: string;
     defaultCover: string;
+}
+
+// V2 配置格式: metadata 和 parsing 分组
+export interface PodcastMetadata {
+    title?: string;
+    description?: string;
+    author?: string;
+    language?: string;
+    category?: string;
+    explicit?: boolean;
+    email?: string;
+    websiteUrl?: string;
+}
+
+export interface PodcastParsingOptions {
+    titleFormat?: 'clean' | 'full';
+    episodeNumberStrategy?: EpisodeNumberStrategy;
+    useMTime?: boolean;
+}
+
+export interface PodcastConfigV2 {
+    metadata?: PodcastMetadata;
+    parsing?: PodcastParsingOptions;
+}
+
+// V2 内部使用的完整配置(扁平化,包含所有字段和默认值)
+export interface PodcastConfigV2Full {
+    // metadata 字段
+    title: string;
+    description: string;
+    author: string;
+    language: string;
+    category: string;
+    explicit: boolean;
+    email: string;
+    websiteUrl: string;
+    // parsing 字段
+    titleFormat: 'clean' | 'full';
+    episodeNumberStrategy: EpisodeNumberStrategy;
+    useMTime: boolean;
 }
