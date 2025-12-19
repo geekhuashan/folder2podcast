@@ -5,16 +5,16 @@ services:
     build: .
     container_name: folder2podcast
     ports:
-      - "3000:3000"
+      - "3100:3100"
     volumes:
       - ./audio:/podcasts  # 挂载音频文件夹
     environment:
       - NODE_ENV=production
-      - PORT=3000
+      - PORT=3100
       - AUDIO_DIR=/podcasts
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--spider", "http://localhost:3000/podcasts"]
+      test: ["CMD", "wget", "--spider", "http://localhost:3100/podcasts"]
       interval: 30s
       timeout: 10s
       retries: 3

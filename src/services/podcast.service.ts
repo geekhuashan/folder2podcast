@@ -100,12 +100,11 @@ export class PodcastService {
             try {
                 // 将 V2 配置转换为 episode.ts 需要的格式
                 const episodeConfig = {
-                    titleFormat: config.titleFormat,
                     episodeNumberStrategy: config.episodeNumberStrategy,
                     useMTime: config.useMTime
                 };
 
-                const episode = createEpisode(file, dirPath, config.titleFormat, episodeConfig);
+                const episode = createEpisode(file, dirPath, episodeConfig);
                 episodes.push(episode);
             } catch (error) {
                 console.warn(`Skipping invalid file: ${file}`, error);

@@ -1,4 +1,4 @@
-import { Feed } from 'feed';
+import { Podcast } from 'podcast';
 import path from 'path';
 import fs from 'fs-extra';
 import { PodcastSourceV2, ProcessOptions } from '../types';
@@ -84,80 +84,39 @@ export class FeedService {
 
         // 获取最新一集的日期作为Feed更新时间
         const latestEpisode = episodes[episodes.length - 1];
-        const updateDate = latestEpisode ? latestEpisode.pubDate : new Date();
+        const pubDate = latestEpisode ? latestEpisode.pubDate : new Date();
 
         // 获取 feed URL
         const feedUrl = `${baseUrl}/feeds/${encodeURIComponent(source.dirName)}.xml`;
 
-        // 创建Feed实例
-        const feed = new Feed({
+        // 创建 Podcast 实例
+        const feed = new Podcast({
             title: config.title,
             description: config.description,
-            id: baseUrl,
-            link: config.websiteUrl || baseUrl,
-            language: config.language,
+            feedUrl: feedUrl,
+            siteUrl: config.websiteUrl || baseUrl,
+            imageUrl: feedImage,
+            author: config.author,
+            managingEditor: config.author,
+            webMaster: config.email,
             copyright: `All rights reserved ${new Date().getFullYear()}, ${config.author}`,
-            updated: updateDate,
-            generator: 'Folder2Cast',
-            feed: feedUrl,
-            author: {
+            language: config.language,
+            pubDate: pubDate,
+            itunesAuthor: config.author,
+            itunesSubtitle: config.description,
+            itunesSummary: config.description,
+            itunesOwner: {
                 name: config.author,
-                email: config.email,
-                link: config.websiteUrl || baseUrl
+                email: config.email
             },
-            image: feedImage
-        });
-
-        // 添加命名空间和根级属性
-        feed.addExtension({
-            name: '_declaration',
-            objects: {
-                _attributes: {
-                    version: '1.0',
-                    encoding: 'utf-8'
+            itunesExplicit: config.explicit,
+            itunesCategory: [
+                {
+                    text: config.category
                 }
-            }
-        });
-
-        feed.addExtension({
-            name: '_namespace',
-            objects: {
-                'xmlns:itunes': 'http://www.itunes.com/dtds/podcast-1.0.dtd',
-                'xmlns:atom': 'http://www.w3.org/2005/Atom'
-            }
-        });
-
-        // 添加标准RSS image标签
-        feed.addExtension({
-            name: '_channel',
-            objects: {
-                'image': {
-                    'url': feedImage,
-                    'title': config.title,
-                    'link': config.websiteUrl || baseUrl
-                }
-            }
-        });
-
-        // 添加iTunes特定标签
-        feed.addExtension({
-            name: '_iTunes',
-            objects: {
-                'itunes:image': {
-                    _attr: { href: feedImage }
-                },
-                'itunes:category': {
-                    _attr: { text: config.category }
-                },
-                'itunes:author': config.author,
-                'itunes:summary': config.description,
-                'itunes:explicit': config.explicit ? 'yes' : 'no',
-                'itunes:owner': {
-                    'itunes:name': config.author,
-                    'itunes:email': config.email
-                },
-                'itunes:type': 'serial'
-            }
+            ],
+            itunesImage: feedImage,
+            itunesType: 'episodic'
         });
 
         // 添加每个剧集
@@ -167,41 +126,26 @@ export class FeedService {
 
             feed.addItem({
                 title: episode.title,
-                id: episodeUrl,
-                link: episodeUrl,
                 description: episode.title,
-                content: episode.title,
+                url: episodeUrl,
+                guid: episodeUrl,
                 date: episode.pubDate,
-                author: [
-                    {
-                        name: config.author,
-                        email: config.email,
-                        link: config.websiteUrl || baseUrl
-                    }
-                ],
                 enclosure: {
                     url: episodeUrl,
                     type: this.getMediaType(episode.fileName),
-                    length: fileSize
+                    size: fileSize
                 },
-                extensions: [
-                    {
-                        name: '_iTunes',
-                        objects: {
-                            'itunes:author': config.author,
-                            'itunes:subtitle': episode.title,
-                            'itunes:summary': episode.title,
-                            'itunes:duration': '00:00:00',
-                            'itunes:explicit': config.explicit ? 'yes' : 'no',
-                            'itunes:episodeType': 'full'
-                        }
-                    }
-                ]
+                itunesAuthor: config.author,
+                itunesSubtitle: episode.title,
+                itunesSummary: episode.title,
+                itunesExplicit: config.explicit,
+                itunesEpisodeType: 'full',
+                itunesDuration: 0
             });
         }
 
-        // 生成RSS XML
-        return feed.rss2();
+        // 生成 RSS XML
+        return feed.buildXml();
     }
 
     /**

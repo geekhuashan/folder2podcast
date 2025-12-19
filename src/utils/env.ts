@@ -1,4 +1,29 @@
 import path from 'path';
+import dotenv from 'dotenv';
+import fs from 'fs';
+
+// 加载环境变量的优先级:
+// 1. .env.local (本地覆盖，不提交到 Git)
+// 2. .env (通用配置，不提交到 Git)
+// 3. .env.development 或 .env.production (根据 NODE_ENV，提交到 Git)
+// 4. process.env (系统环境变量，优先级最高)
+
+const nodeEnv = process.env.NODE_ENV || 'development';
+const rootDir = path.resolve(__dirname, '../..');
+
+// 按优先级加载配置文件
+const envFiles = [
+    path.join(rootDir, `.env.${nodeEnv}`),
+    path.join(rootDir, '.env'),
+    path.join(rootDir, '.env.local'),
+];
+
+// 从低优先级到高优先级加载，后加载的会覆盖先加载的
+envFiles.forEach(file => {
+    if (fs.existsSync(file)) {
+        dotenv.config({ path: file, override: false });
+    }
+});
 
 export interface EnvConfig {
     // 音频文件夹路径
@@ -9,6 +34,8 @@ export interface EnvConfig {
     TITLE_FORMAT: 'clean' | 'full';
     // 服务器基础URL，用于生成RSS feed中的链接
     BASE_URL: string;
+    // 管理 API 密钥（可选）
+    API_KEY?: string;
 }
 
 /**
@@ -17,7 +44,7 @@ export interface EnvConfig {
  */
 export function getEnvConfig(): EnvConfig {
     const defaultAudioDir = path.join(process.cwd(), 'audio');
-    const defaultPort = 3000;
+    const defaultPort = 3100;
 
     const port = parseInt(process.env.PORT || String(defaultPort), 10);
     // 构建默认的基础URL
@@ -26,11 +53,13 @@ export function getEnvConfig(): EnvConfig {
     return {
         // 音频文件夹路径，默认为当前目录下的 audio 文件夹
         AUDIO_DIR: process.env.AUDIO_DIR || defaultAudioDir,
-        // 服务器端口，默认3000
+        // 服务器端口，默认3100
         PORT: port,
         // 标题显示策略，默认为full（完整文件名，不含扩展名）
         TITLE_FORMAT: (process.env.TITLE_FORMAT as 'clean' | 'full') || 'full',
         // 服务器基础URL，默认为 http://localhost:端口号
-        BASE_URL: process.env.BASE_URL || defaultBaseUrl
+        BASE_URL: process.env.BASE_URL || defaultBaseUrl,
+        // API 密钥（可选）
+        API_KEY: process.env.API_KEY
     };
 }

@@ -20,7 +20,6 @@ export class ConfigService {
         email: '',
         websiteUrl: '',
         // parsing 字段
-        titleFormat: getEnvConfig().TITLE_FORMAT,
         episodeNumberStrategy: 'prefix',
         useMTime: false
     };
@@ -89,7 +88,7 @@ export class ConfigService {
         // 检查是否有任何 V1 字段
         const v1Fields = [
             'title', 'description', 'author', 'language', 'category',
-            'explicit', 'email', 'websiteUrl', 'titleFormat',
+            'explicit', 'email', 'websiteUrl',
             'episodeNumberStrategy', 'useMTime'
         ];
 
@@ -127,7 +126,6 @@ export class ConfigService {
         if (v1Config.websiteUrl !== undefined) v2Config.metadata!.websiteUrl = v1Config.websiteUrl;
 
         // 映射 parsing 字段
-        if (v1Config.titleFormat !== undefined) v2Config.parsing!.titleFormat = v1Config.titleFormat;
         if (v1Config.episodeNumberStrategy !== undefined) v2Config.parsing!.episodeNumberStrategy = v1Config.episodeNumberStrategy;
         if (v1Config.useMTime !== undefined) v2Config.parsing!.useMTime = v1Config.useMTime;
 
@@ -156,7 +154,6 @@ export class ConfigService {
             email: metadata.email || this.DEFAULT_CONFIG.email,
             websiteUrl: metadata.websiteUrl || this.DEFAULT_CONFIG.websiteUrl,
             // parsing 字段
-            titleFormat: parsing.titleFormat || this.DEFAULT_CONFIG.titleFormat,
             episodeNumberStrategy: parsing.episodeNumberStrategy || this.DEFAULT_CONFIG.episodeNumberStrategy,
             useMTime: parsing.useMTime !== undefined ? parsing.useMTime : this.DEFAULT_CONFIG.useMTime
         };
@@ -168,9 +165,9 @@ export class ConfigService {
      */
     private validateEpisodeNumberStrategy(strategy: EpisodeNumberStrategy): void {
         if (typeof strategy === 'string') {
-            if (!['prefix', 'suffix', 'first', 'last'].includes(strategy)) {
+            if (!['prefix', 'suffix', 'first', 'last', 'date'].includes(strategy)) {
                 throw new Error(
-                    'Invalid episode number strategy. Must be one of: prefix, suffix, first, last'
+                    'Invalid episode number strategy. Must be one of: prefix, suffix, first, last, date'
                 );
             }
         } else if (typeof strategy === 'object') {

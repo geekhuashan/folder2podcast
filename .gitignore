@@ -2,6 +2,15 @@ audio
 node_modules
 CHANGELOG.md
 dist
+bin
+
+# 环境变量文件
+.env
+.env.local
+.env.development
+
+# 测试文件
+test-*.js
 
 AGENTS.md
 CLAUDE.md

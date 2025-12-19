@@ -224,11 +224,11 @@ http://[server-address]/feeds/[podcast-folder-name].xml
    npm run start:dev
 
    # Or start with specific config
-   AUDIO_DIR=/path/to/audiobooks PORT=3000 npm run start:dev
+   AUDIO_DIR=/path/to/audiobooks PORT=3100 npm run start:dev
    ```
 
 4. **Verify Service**
-   - Access dashboard: `http://localhost:3000/podcasts`
+   - Access dashboard: `http://localhost:3100/podcasts`
    - Verify audio files are accessible
    - Test podcast subscription functionality
 

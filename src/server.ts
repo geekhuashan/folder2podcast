@@ -1,5 +1,6 @@
 import fastify, { FastifyInstance } from 'fastify';
 import fastifyStatic from '@fastify/static';
+import fastifyCors from '@fastify/cors';
 import path from 'path';
 import { getEnvConfig } from './utils/env';
 import { ConfigService } from './services/config.service';
@@ -8,6 +9,7 @@ import { FeedService } from './services/feed.service';
 import { errorHandler } from './middleware/error.middleware';
 import { registerApiRoutes } from './routes/api.routes';
 import { registerFeedRoutes } from './routes/feed.routes';
+import { registerManagementRoutes } from './routes/management.routes';
 
 // 设置默认封面路径为assets中的图片
 const DEFAULT_COVER = '/image/default-cover.png';
@@ -44,6 +46,13 @@ export class PodcastServer {
      */
     public async initialize(): Promise<void> {
         try {
+            // 注册 CORS 支持(允许全部跨域访问)
+            await this.server.register(fastifyCors, {
+                origin: true, // 允许所有来源
+                credentials: true, // 允许携带凭证
+                methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS']
+            });
+
             // 注册错误处理中间件
             this.server.setErrorHandler(errorHandler);
 
@@ -66,6 +75,9 @@ export class PodcastServer {
 
             // 注册 Feed 路由
             await registerFeedRoutes(this.server, this.podcastService, this.feedService);
+
+            // 注册管理 API 路由(需要认证)
+            await registerManagementRoutes(this.server, this.podcastService, this.feedService);
 
             // 添加根路径重定向
             this.server.get('/', async (request, reply) => {

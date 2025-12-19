@@ -29,7 +29,7 @@ RUN mkdir -p /podcasts && chmod 755 /podcasts
 
 # 设置环境变量
 ENV NODE_ENV=production \
-    PORT=3000 \
+    PORT=3100 \
     AUDIO_DIR=/podcasts \
     PUID=1000 \
     PGID=1000
@@ -43,7 +43,7 @@ RUN printf '%s\n' \
     chmod +x /entrypoint.sh
 
 # 暴露端口
-EXPOSE 3000
+EXPOSE 3100
 
 # 健康检查
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \

@@ -211,11 +211,11 @@ http://[服务器地址]/feeds/[播客目录名].xml
    npm run start:dev
 
    # 或指定配置启动
-   AUDIO_DIR=/path/to/audiobooks PORT=3000 npm run start:dev
+   AUDIO_DIR=/path/to/audiobooks PORT=3100 npm run start:dev
    ```
 
 4. **验证服务**
-   - 访问管理面板：`http://localhost:3000/podcasts`
+   - 访问管理面板：`http://localhost:3100/podcasts`
    - 确认音频文件可访问
    - 测试播客订阅功能
 

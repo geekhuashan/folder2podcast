@@ -11,6 +11,7 @@ export type EpisodeNumberStrategy =
     | 'suffix'          // 默认：从文件名末尾匹配数字
     | 'first'           // 配置：从左到右找第一个数字
     | 'last'            // 配置：从右到左找最后一个数字
+    | 'date'            // 配置：自动识别日期格式（YYYY-MM-DD, YYYYMMDD等）
     | { pattern: string }; // 配置：使用自定义正则表达式
 
 export interface PodcastConfig {
@@ -22,7 +23,6 @@ export interface PodcastConfig {
     explicit?: boolean;
     email?: string;
     websiteUrl?: string;
-    titleFormat?: 'clean' | 'full';  // 标题显示策略：clean=清理后的标题，full=完整文件名
     episodeNumberStrategy?: EpisodeNumberStrategy;  // 可选：序号提取策略
     useMTime?: boolean;  // 是否使用文件的创建时间作为发布时间
 }
@@ -62,7 +62,6 @@ export interface PodcastMetadata {
 }
 
 export interface PodcastParsingOptions {
-    titleFormat?: 'clean' | 'full';
     episodeNumberStrategy?: EpisodeNumberStrategy;
     useMTime?: boolean;
 }
@@ -84,7 +83,6 @@ export interface PodcastConfigV2Full {
     email: string;
     websiteUrl: string;
     // parsing 字段
-    titleFormat: 'clean' | 'full';
     episodeNumberStrategy: EpisodeNumberStrategy;
     useMTime: boolean;
 }
