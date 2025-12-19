@@ -22,7 +22,6 @@ export function migrateV1ToV2(v1Config: PodcastConfig): PodcastConfigV2 {
     if (v1Config.websiteUrl !== undefined) v2Config.metadata!.websiteUrl = v1Config.websiteUrl;
 
     // 映射 parsing 字段
-    if (v1Config.titleFormat !== undefined) v2Config.parsing!.titleFormat = v1Config.titleFormat;
     if (v1Config.episodeNumberStrategy !== undefined) v2Config.parsing!.episodeNumberStrategy = v1Config.episodeNumberStrategy;
     if (v1Config.useMTime !== undefined) v2Config.parsing!.useMTime = v1Config.useMTime;
 

@@ -10,6 +10,8 @@ import { errorHandler } from './middleware/error.middleware';
 import { registerApiRoutes } from './routes/api.routes';
 import { registerFeedRoutes } from './routes/feed.routes';
 import { registerManagementRoutes } from './routes/management.routes';
+import { registerBilibiliRoutes } from './routes/bilibili.routes';
+import { BilibiliDownloadService } from './services/bilibili-download.service';
 
 // 设置默认封面路径为assets中的图片
 const DEFAULT_COVER = '/image/default-cover.png';
@@ -24,6 +26,7 @@ export class PodcastServer {
     private configService: ConfigService;
     private podcastService: PodcastService;
     private feedService: FeedService;
+    private bilibiliService: BilibiliDownloadService;
 
     constructor(audioDir: string, port: number) {
         this.audioDir = path.resolve(audioDir);
@@ -39,6 +42,7 @@ export class PodcastServer {
         this.configService = new ConfigService();
         this.podcastService = new PodcastService();
         this.feedService = new FeedService();
+        this.bilibiliService = new BilibiliDownloadService();
     }
 
     /**
@@ -78,6 +82,9 @@ export class PodcastServer {
 
             // 注册管理 API 路由(需要认证)
             await registerManagementRoutes(this.server, this.podcastService, this.feedService);
+
+            // 注册 B 站下载路由
+            await registerBilibiliRoutes(this.server, this.bilibiliService, this.feedService);
 
             // 添加根路径重定向
             this.server.get('/', async (request, reply) => {

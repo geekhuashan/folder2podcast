@@ -1,6 +1,7 @@
 import { createSignal, onMount, Show } from 'solid-js';
 import PodcastList from './components/PodcastList';
 import FileManager from './components/FileManager';
+import FloatingTaskWindow from './components/FloatingTaskWindow';
 import { ToastProvider } from './components/Toast';
 
 export default function App() {
@@ -70,6 +71,9 @@ export default function App() {
             <FileManager podcast={selectedPodcast()} />
           </Show>
         </main>
+
+        {/* 浮动任务窗口 */}
+        <FloatingTaskWindow />
       </div>
     </ToastProvider>
   );

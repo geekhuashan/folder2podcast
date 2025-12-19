@@ -1,6 +1,7 @@
 import { createSignal, createResource, For, Show } from 'solid-js';
 import { podcastsAPI } from '../utils/api';
 import CreatePodcastModal from './CreatePodcastModal';
+import BilibiliDownload from './BilibiliDownload';
 import { useToast } from './Toast';
 
 // 复制到剪贴板功能
@@ -47,6 +48,15 @@ export default function PodcastList(props) {
 
   return (
     <div>
+      {/* B 站视频下载组件 - 首页重要功能 */}
+      <BilibiliDownload
+        podcasts={podcasts()?.data || []}
+        onTaskAdded={() => {
+          // 任务添加后延迟刷新播客列表（给下载一点时间）
+          setTimeout(refetch, 2000);
+        }}
+      />
+
       <div style={{
         display: 'flex',
         'justify-content': 'space-between',

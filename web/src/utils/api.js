@@ -127,3 +127,22 @@ export const podcastsAPI = {
     );
   },
 };
+
+// B 站下载 API
+export const bilibiliAPI = {
+  /**
+   * 下载 B 站视频为音频
+   * @param {Object} params - 下载参数
+   * @param {string} params.url - B 站视频链接或 BV 号
+   * @param {string} params.podcastName - 目标播客名称（可选）
+   * @param {string} params.episodeTitle - 自定义剧集标题（可选）
+   * @param {boolean} params.autoCreatePodcast - 是否自动创建播客（默认 true）
+   * @returns {Promise} 下载结果
+   */
+  async download(params) {
+    return request('/api/bilibili/download', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+  },
+};

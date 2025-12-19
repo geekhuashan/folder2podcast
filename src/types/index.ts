@@ -86,3 +86,33 @@ export interface PodcastConfigV2Full {
     episodeNumberStrategy: EpisodeNumberStrategy;
     useMTime: boolean;
 }
+
+/**
+ * B 站视频下载请求参数
+ */
+export interface BilibiliDownloadRequest {
+    url: string;                    // B 站视频链接或 BV 号
+    podcastName?: string;           // 目标播客目录名（可选）
+    episodeTitle?: string;          // 自定义剧集标题（可选）
+    autoCreatePodcast?: boolean;    // 是否自动创建播客（默认 true）
+}
+
+/**
+ * B 站视频信息
+ */
+export interface BilibiliVideoInfo {
+    bvid: string;                   // B 站视频 BV 号
+    title: string;                  // 原始视频标题
+}
+
+/**
+ * B 站视频下载结果
+ */
+export interface BilibiliDownloadResult {
+    success: boolean;               // 是否下载成功
+    filePath: string;               // 下载的文件完整路径
+    fileName: string;               // 文件名
+    podcastName: string;            // 所属播客名称
+    episodeTitle: string;           // 剧集标题
+    videoInfo: BilibiliVideoInfo;   // 视频信息
+}
