@@ -3,3 +3,8 @@ node_modules
 CHANGELOG.md
 .feeds/
 dist
+
+AGENTS.md
+CLAUDE.md
+openspec/*
+.claude/*
