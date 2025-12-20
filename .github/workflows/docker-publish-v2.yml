@@ -9,9 +9,7 @@ on:
   workflow_dispatch:  # 允许手动触发
 
 env:
-  # Docker Hub 仓库配置
   IMAGE_NAME: yaotutu/folder2podcast
-  # 支持多架构构建
   PLATFORMS: linux/amd64,linux/arm64
 
 jobs:
@@ -77,7 +75,7 @@ jobs:
 
       # 可选：发送通知（如果配置了 Bark）
       - name: Send Bark notification
-        if: success() && secrets.BARK_KEY != ''
+        if: ${{ success() && secrets.BARK_KEY }}
         continue-on-error: true
         run: |
           TITLE=$(echo -n "Docker镜像构建成功 (v2)" | jq -sRr @uri)
