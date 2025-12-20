@@ -4,7 +4,7 @@ CHANGELOG.md
 dist
 
 # BBDown 二进制文件（各平台）
-bin/BBDown-*
+# bin/BBDown-*
 
 # 环境变量文件
 .env
