@@ -27,6 +27,8 @@ export default function PodcastList(props) {
   const [podcasts, { refetch }] = createResource(podcastsAPI.getAll);
   const [showCreateModal, setShowCreateModal] = createSignal(false);
   const [copiedPodcast, setCopiedPodcast] = createSignal(null);
+  const [podcastToDelete, setPodcastToDelete] = createSignal(null);
+  const [isDeleting, setIsDeleting] = createSignal(false);
 
   const handleCreateSuccess = () => {
     setShowCreateModal(false);
@@ -43,6 +45,32 @@ export default function PodcastList(props) {
     } else {
       toast.error('复制失败，请手动复制');
     }
+  };
+
+  const handleDeleteClick = (podcast, e) => {
+    e.stopPropagation(); // 阻止卡片点击事件
+    setPodcastToDelete(podcast);
+  };
+
+  const handleConfirmDelete = async () => {
+    const podcast = podcastToDelete();
+    if (!podcast) return;
+
+    setIsDeleting(true);
+    try {
+      await podcastsAPI.delete(podcast.dirName);
+      toast.success(`播客"${podcast.title}"已删除`);
+      setPodcastToDelete(null);
+      refetch(); // 刷新播客列表
+    } catch (error) {
+      toast.error(`删除失败: ${error.message}`);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleCancelDelete = () => {
+    setPodcastToDelete(null);
   };
 
   return (
@@ -91,8 +119,22 @@ export default function PodcastList(props) {
                     class="podcast-card"
                     onClick={() => props.onSelect(podcast)}
                   >
-                    <div class="status-pill">
-                      🎧 {podcast.episodeCount} 集
+                    <div class="podcast-card__actions">
+                      <div class="status-pill">
+                        🎧 {podcast.episodeCount} 集
+                      </div>
+                      <button
+                        class="btn-icon btn-danger"
+                        onClick={(e) => handleDeleteClick(podcast, e)}
+                        title="删除播客"
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <polyline points="3 6 5 6 21 6"/>
+                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                          <line x1="10" y1="11" x2="10" y2="17"/>
+                          <line x1="14" y1="11" x2="14" y2="17"/>
+                        </svg>
+                      </button>
                     </div>
                     <h3>{podcast.title}</h3>
                     <p>
@@ -130,6 +172,81 @@ export default function PodcastList(props) {
         onClose={() => setShowCreateModal(false)}
         onSuccess={handleCreateSuccess}
       />
+
+      {/* 删除确认对话框 */}
+      <Show when={podcastToDelete()}>
+        <div class="modal-overlay" onClick={handleCancelDelete}>
+          <div class="modal modal--small" onClick={(e) => e.stopPropagation()}>
+            <div style={{ padding: '1.5rem' }}>
+              {/* 头部 */}
+              <div style={{ 'margin-bottom': '1.5rem', 'text-align': 'center' }}>
+                <div style={{
+                  width: '48px',
+                  height: '48px',
+                  'border-radius': '50%',
+                  background: '#fee2e2',
+                  color: '#dc2626',
+                  display: 'flex',
+                  'align-items': 'center',
+                  'justify-content': 'center',
+                  margin: '0 auto 1rem',
+                  'font-size': '24px'
+                }}>
+                  ⚠
+                </div>
+                <h2 style={{ 'font-size': '1.25rem', 'font-weight': '700', margin: '0 0 0.5rem' }}>
+                  确认删除播客
+                </h2>
+                <p style={{ 'font-size': '0.875rem', color: 'var(--text-muted)', margin: 0 }}>
+                  此操作将删除播客及其所有文件，且无法恢复
+                </p>
+              </div>
+
+              {/* 播客信息 */}
+              <div style={{
+                background: 'var(--surface-soft)',
+                padding: '1rem',
+                'border-radius': 'var(--radius-sm)',
+                'margin-bottom': '1.5rem',
+                border: '1px solid var(--border)'
+              }}>
+                <div style={{ 'font-weight': '600', 'margin-bottom': '0.25rem' }}>
+                  {podcastToDelete()?.title}
+                </div>
+                <div style={{ 'font-size': '0.875rem', color: 'var(--text-muted)' }}>
+                  目录：{podcastToDelete()?.dirName} · {podcastToDelete()?.episodeCount} 集
+                </div>
+              </div>
+
+              {/* 按钮 */}
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <button
+                  type="button"
+                  class="btn btn-secondary"
+                  onClick={handleCancelDelete}
+                  disabled={isDeleting()}
+                  style={{ flex: 1 }}
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  class="btn"
+                  onClick={handleConfirmDelete}
+                  disabled={isDeleting()}
+                  style={{
+                    flex: 1,
+                    background: '#dc2626',
+                    color: 'white'
+                  }}
+                >
+                  {isDeleting() ? '删除中...' : '确认删除'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Show>
     </>
   );
 }

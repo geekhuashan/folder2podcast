@@ -1,20 +1,60 @@
+# Folder2Podcast v2 Docker Compose 配置
+# 使用说明：
+# 1. 修改 volumes 部分，将 ./audio 替换为你的音频文件夹路径
+# 2. 根据需要修改 BASE_URL（确保与访问地址一致）
+# 3. 运行: docker-compose up -d
+
 version: '3.8'
 
 services:
   folder2podcast:
-    build: .
-    container_name: folder2podcast
+    # 构建配置
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: folder2podcast:v2
+    container_name: folder2podcast-v2
+
+    # 端口映射
     ports:
       - "3100:3100"
+
+    # 卷挂载
     volumes:
-      - ./audio:/podcasts  # 挂载音频文件夹
+      # 音频文件目录（只读模式，保护原始文件）
+      - ./audio:/podcasts:ro
+      # 如果需要使用 BBDown 下载功能，需要改为读写模式
+      # - ./audio:/podcasts
+
+    # 环境变量配置
     environment:
       - NODE_ENV=production
       - PORT=3100
       - AUDIO_DIR=/podcasts
+      # BASE_URL 需要根据实际访问地址修改
+      # 如果通过域名访问，改为: https://your-domain.com
+      # 如果通过局域网访问，改为: http://192.168.x.x:3100
+      - BASE_URL=http://localhost:3100
+      # 用户和组 ID（Mac/Linux 用户可以设置为当前用户）
+      - PUID=1000
+      - PGID=1000
+      # 可选：标题格式化策略
+      # - TITLE_FORMAT=clean
+
+    # 重启策略
     restart: unless-stopped
+
+    # 健康检查
     healthcheck:
-      test: ["CMD", "wget", "--spider", "http://localhost:3100/podcasts"]
+      test: ["CMD", "wget", "--spider", "http://localhost:3100/api/v2/podcasts"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 10s
+
+    # 日志配置（限制日志大小）
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

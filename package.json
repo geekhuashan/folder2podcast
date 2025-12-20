@@ -17,12 +17,17 @@
     "dev": "concurrently -n \"backend,frontend\" -c \"blue,green\" \"npm run dev:backend\" \"npm run dev:frontend\"",
     "tag": "node scripts/tag-version.js",
     "generate-changelog": "ts-node scripts/generate-changelog.ts",
-    "docker:build": "docker build -t folder2podcast:dev .",
-    "docker:test": "docker run -d --name folder2podcast-test -p 3100:3100 -v $HOME/Desktop/audio_books:/podcasts folder2podcast:dev",
-    "docker:stop": "docker stop folder2podcast-test && docker rm folder2podcast-test",
-    "docker:clean": "npm run docker:stop && docker rmi folder2podcast:dev",
-    "docker:mac": "docker run -d --name folder2podcast-mac -p 3100:3100 -v $HOME/Desktop/audio_books:/podcasts -e PUID=$(id -u) -e PGID=$(id -g) -e PORT=3100 -e BASE_URL=http://localhost:3100 folder2podcast:dev",
-    "docker:mac:stop": "docker stop folder2podcast-mac && docker rm folder2podcast-mac"
+    "docker:build": "docker build -t folder2podcast:v2 -t folder2podcast:latest-v2 .",
+    "docker:build:all": "npm run build:all && docker build -t folder2podcast:v2 -t folder2podcast:latest-v2 .",
+    "docker:test": "docker run -d --name folder2podcast-test-v2 -p 3100:3100 -v $HOME/Desktop/audio_books:/podcasts -e BASE_URL=http://localhost:3100 folder2podcast:v2",
+    "docker:stop": "docker stop folder2podcast-test-v2 && docker rm folder2podcast-test-v2",
+    "docker:clean": "npm run docker:stop 2>/dev/null || true && docker rmi folder2podcast:v2 folder2podcast:latest-v2 2>/dev/null || true",
+    "docker:mac": "docker run -d --name folder2podcast-mac-v2 -p 3100:3100 -v $HOME/Desktop/audio_books:/podcasts -e PUID=$(id -u) -e PGID=$(id -g) -e PORT=3100 -e BASE_URL=http://localhost:3100 folder2podcast:v2",
+    "docker:mac:stop": "docker stop folder2podcast-mac-v2 && docker rm folder2podcast-mac-v2",
+    "docker:compose:up": "docker-compose up -d",
+    "docker:compose:down": "docker-compose down",
+    "docker:compose:logs": "docker-compose logs -f",
+    "docker:compose:rebuild": "docker-compose down && docker-compose build --no-cache && docker-compose up -d"
   },
   "keywords": [
     "podcast",

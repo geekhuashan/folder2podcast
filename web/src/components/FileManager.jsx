@@ -1,8 +1,16 @@
-import { createSignal, createResource, For, Show } from 'solid-js';
+import { createSignal, createResource, For, Show, createMemo } from 'solid-js';
 import { podcastsAPI } from '../utils/api';
 import ConfigEditor from './ConfigEditor';
 import AudioPlayer from './AudioPlayer';
+import UploadProgressWindow from './UploadProgressWindow';
 import { useToast } from './Toast';
+import {
+  addUploadTask,
+  updateTaskProgress,
+  markTaskCompleted,
+  markTaskFailed,
+  uploadState
+} from '../utils/uploadManager';
 
 // 复制到剪贴板功能
 const copyToClipboard = async (text) => {
@@ -25,12 +33,14 @@ const copyToClipboard = async (text) => {
 export default function FileManager(props) {
   const toast = useToast();
   const [files, { refetch }] = createResource(() => props.podcast.dirName, podcastsAPI.getFiles);
-  const [uploading, setUploading] = createSignal(false);
   const [showConfigEditor, setShowConfigEditor] = createSignal(false);
   const [playingAudio, setPlayingAudio] = createSignal(null);
   const [renaming, setRenaming] = createSignal(null);
   const [newFileName, setNewFileName] = createSignal('');
   const [rssCopied, setRssCopied] = createSignal(false);
+
+  // 创建响应式的上传状态统计
+  const uploadStats = createMemo(() => uploadState.summary);
 
   // 复制 RSS 链接
   const handleCopyRSS = async () => {
@@ -44,21 +54,56 @@ export default function FileManager(props) {
     }
   };
 
-  // 上传文件
+  // 上传文件（支持多文件选择）
   const handleUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const selectedFiles = Array.from(e.target.files || []);
+    if (selectedFiles.length === 0) return;
 
-    setUploading(true);
-    try {
-      await podcastsAPI.uploadFile(props.podcast.dirName, file);
-      toast.success('文件上传成功！');
-      refetch();
-    } catch (error) {
-      toast.error(`上传失败: ${error.message}`);
-    } finally {
-      setUploading(false);
-      e.target.value = '';
+    // 为每个文件创建上传任务
+    const taskIds = selectedFiles.map(file =>
+      addUploadTask(file, props.podcast.dirName)
+    );
+
+    // 依次上传每个文件（避免并发导致服务器压力过大）
+    for (let i = 0; i < selectedFiles.length; i++) {
+      const file = selectedFiles[i];
+      const taskId = taskIds[i];
+
+      try {
+        // 调用带进度回调的上传方法
+        await podcastsAPI.uploadFileWithProgress(
+          props.podcast.dirName,
+          file,
+          (loaded, total, percentage) => {
+            // 更新上传进度
+            updateTaskProgress(taskId, percentage);
+          }
+        );
+
+        // 标记任务完成
+        markTaskCompleted(taskId);
+      } catch (error) {
+        // 标记任务失败
+        markTaskFailed(taskId, error.message);
+        toast.error(`${file.name} 上传失败: ${error.message}`);
+      }
+    }
+
+    // 所有文件上传完成后，刷新文件列表
+    refetch();
+
+    // 清空文件输入框
+    e.target.value = '';
+
+    // 显示完成提示
+    const successCount = taskIds.length - uploadState.tasks.filter(t =>
+      taskIds.includes(t.id) && t.status === 'failed'
+    ).length;
+
+    if (successCount === taskIds.length) {
+      toast.success(`成功上传 ${successCount} 个文件！`);
+    } else if (successCount > 0) {
+      toast.success(`成功上传 ${successCount}/${taskIds.length} 个文件`);
     }
   };
 
@@ -115,17 +160,21 @@ export default function FileManager(props) {
           <p class="text-muted">目录：{props.podcast.dirName}</p>
         </div>
         <div class="hero-actions">
-          <label class="btn btn-primary" style={{ cursor: uploading() ? 'wait' : 'pointer' }}>
-            <Show when={uploading()} fallback={<span>📤 上传文件</span>}>
+          <label class="btn btn-primary" style={{ cursor: uploadStats().uploading > 0 ? 'wait' : 'pointer' }}>
+            <Show
+              when={uploadStats().uploading > 0}
+              fallback={<span>📤 上传文件</span>}
+            >
               <div class="spinner" style={{ width: '1rem', height: '1rem' }}></div>
-              正在上传...
+              上传中 ({uploadStats().uploading}/{uploadStats().total})
             </Show>
             <input
               type="file"
               accept="audio/*,image/*"
+              multiple
               style={{ display: 'none' }}
               onChange={handleUpload}
-              disabled={uploading()}
+              disabled={uploadStats().uploading > 0}
             />
           </label>
           <button class="btn btn-soft" onClick={() => setShowConfigEditor(true)}>
@@ -252,6 +301,9 @@ export default function FileManager(props) {
           onClose={() => setPlayingAudio(null)}
         />
       </Show>
+
+      {/* 上传进度浮动窗口 */}
+      <UploadProgressWindow />
     </div>
   );
 }

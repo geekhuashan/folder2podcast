@@ -19,11 +19,11 @@ export async function registerManagementRoutes(
     const fileService = new FileManagementService();
     const configService = new ConfigManagementService();
 
-    // 注册文件上传支持
+    // 注册文件上传支持（允许多文件上传）
     await server.register(fastifyMultipart, {
         limits: {
-            fileSize: 500 * 1024 * 1024, // 500MB
-            files: 1
+            fileSize: 500 * 1024 * 1024, // 单文件最大 500MB
+            files: 10 // 允许一次上传最多 10 个文件
         }
     });
 
@@ -94,6 +94,31 @@ export async function registerManagementRoutes(
     });
 
     /**
+     * DELETE /api/v2/manage/podcasts/:podcastDir
+     * 删除整个播客及其所有文件
+     */
+    server.delete('/api/v2/manage/podcasts/:podcastDir', {
+        preHandler: apiKeyAuth
+    }, async (request, reply) => {
+        const { podcastDir } = request.params as { podcastDir: string };
+
+        try {
+            // 删除播客目录
+            await fileService.deletePodcast(podcastDir);
+
+            // 清除缓存
+            feedService.clearCache(podcastDir);
+
+            reply.send({ message: 'Podcast deleted successfully' });
+        } catch (error) {
+            reply.code(500).send({
+                error: 'Failed to delete podcast',
+                message: error instanceof Error ? error.message : 'Unknown error'
+            });
+        }
+    });
+
+    /**
      * GET /api/v2/manage/podcasts/:podcastDir/files
      * 列出播客目录下的所有文件
      */
@@ -123,7 +148,7 @@ export async function registerManagementRoutes(
 
     /**
      * POST /api/v2/manage/podcasts/:podcastDir/files
-     * 上传文件到播客目录
+     * 上传单个或多个文件到播客目录
      */
     server.post('/api/v2/manage/podcasts/:podcastDir/files', {
         preHandler: apiKeyAuth
@@ -131,24 +156,55 @@ export async function registerManagementRoutes(
         const { podcastDir } = request.params as { podcastDir: string };
 
         try {
-            const data = await request.file();
-            if (!data) {
+            const files = await request.files();
+            const uploadResults = [];
+            let hasError = false;
+
+            // 处理每个上传的文件
+            for await (const file of files) {
+                try {
+                    const buffer = await file.toBuffer();
+                    await fileService.saveFile(podcastDir, file.filename, buffer);
+                    uploadResults.push({
+                        filename: file.filename,
+                        success: true
+                    });
+                } catch (error) {
+                    hasError = true;
+                    uploadResults.push({
+                        filename: file.filename,
+                        success: false,
+                        error: error instanceof Error ? error.message : 'Unknown error'
+                    });
+                }
+            }
+
+            // 检查是否有文件上传
+            if (uploadResults.length === 0) {
                 return reply.code(400).send({ error: 'No file uploaded' });
             }
 
-            const buffer = await data.toBuffer();
-            await fileService.saveFile(podcastDir, data.filename, buffer);
+            // 清除缓存（只要有文件成功上传就清除）
+            const successCount = uploadResults.filter(r => r.success).length;
+            if (successCount > 0) {
+                feedService.clearCache(podcastDir);
+            }
 
-            // 清除缓存
-            feedService.clearCache(podcastDir);
-
+            // 返回批量上传结果
             reply.send({
-                message: 'File uploaded successfully',
-                filename: data.filename
+                message: hasError
+                    ? `Uploaded ${successCount}/${uploadResults.length} files successfully`
+                    : 'All files uploaded successfully',
+                results: uploadResults,
+                summary: {
+                    total: uploadResults.length,
+                    success: successCount,
+                    failed: uploadResults.length - successCount
+                }
             });
         } catch (error) {
             reply.code(500).send({
-                error: 'Failed to upload file',
+                error: 'Failed to upload files',
                 message: error instanceof Error ? error.message : 'Unknown error'
             });
         }

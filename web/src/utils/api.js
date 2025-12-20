@@ -47,12 +47,70 @@ export const podcastsAPI = {
     });
   },
 
+  // 删除播客
+  async delete(podcastDir) {
+    return request(`${API_BASE}/manage/podcasts/${encodeURIComponent(podcastDir)}`, {
+      method: 'DELETE',
+    });
+  },
+
   // 获取播客文件列表
   async getFiles(podcastDir) {
     return request(`${API_BASE}/manage/podcasts/${encodeURIComponent(podcastDir)}/files`);
   },
 
-  // 上传文件
+  // 上传文件（带进度回调）
+  async uploadFileWithProgress(podcastDir, file, onProgress) {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      const formData = new FormData();
+      formData.append('file', file);
+
+      // 监听上传进度
+      xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable && onProgress) {
+          const percentComplete = (e.loaded / e.total) * 100;
+          onProgress(e.loaded, e.total, percentComplete);
+        }
+      });
+
+      // 监听上传完成
+      xhr.addEventListener('load', () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            const response = JSON.parse(xhr.responseText);
+            resolve(response);
+          } catch (error) {
+            reject(new Error('Failed to parse response'));
+          }
+        } else {
+          try {
+            const error = JSON.parse(xhr.responseText);
+            reject(new Error(error.message || 'Upload failed'));
+          } catch {
+            reject(new Error(`Upload failed with status ${xhr.status}`));
+          }
+        }
+      });
+
+      // 监听上传错误
+      xhr.addEventListener('error', () => {
+        reject(new Error('Network error occurred'));
+      });
+
+      // 监听上传中止
+      xhr.addEventListener('abort', () => {
+        reject(new Error('Upload aborted'));
+      });
+
+      // 发送请求
+      const url = addApiKey(`${API_BASE}/manage/podcasts/${encodeURIComponent(podcastDir)}/files`);
+      xhr.open('POST', url);
+      xhr.send(formData);
+    });
+  },
+
+  // 上传文件（原有方法，保持向后兼容）
   async uploadFile(podcastDir, file) {
     const formData = new FormData();
     formData.append('file', file);

@@ -1,0 +1,85 @@
+name: Docker Image CI/CD (v2)
+
+# 专门用于 dev-v2 分支的自动构建和发布
+# 不影响 main 分支和 v1 版本的发布流程
+
+on:
+  push:
+    branches: [ "dev-v2" ]
+  workflow_dispatch:  # 允许手动触发
+
+env:
+  # Docker Hub 仓库配置
+  IMAGE_NAME: yaotutu/folder2podcast
+  # 支持多架构构建
+  PLATFORMS: linux/amd64,linux/arm64
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract commit SHA (short)
+        id: sha
+        run: echo "short_sha=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+
+      - name: Build and push Docker image (dev-v2)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          platforms: ${{ env.PLATFORMS }}
+          tags: |
+            ${{ env.IMAGE_NAME }}:dev-v2
+            ${{ env.IMAGE_NAME }}:dev-v2-${{ steps.sha.outputs.short_sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.repositoryUrl }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+            org.opencontainers.image.version=v2-dev
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Update latest-v2 tag
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          platforms: ${{ env.PLATFORMS }}
+          tags: ${{ env.IMAGE_NAME }}:latest-v2
+          cache-from: type=gha
+
+      - name: Image digest
+        run: |
+          echo "✅ Docker images built and pushed successfully!"
+          echo "📦 Tags:"
+          echo "  - ${{ env.IMAGE_NAME }}:dev-v2"
+          echo "  - ${{ env.IMAGE_NAME }}:dev-v2-${{ steps.sha.outputs.short_sha }}"
+          echo "  - ${{ env.IMAGE_NAME }}:latest-v2"
+
+      # 可选：发送通知（如果配置了 Bark）
+      - name: Send Bark notification
+        if: success() && secrets.BARK_KEY != ''
+        continue-on-error: true
+        run: |
+          TITLE=$(echo -n "Docker镜像构建成功 (v2)" | jq -sRr @uri)
+          BODY=$(echo -n "dev-v2分支已成功构建并推送到DockerHub" | jq -sRr @uri)
+          curl --location "https://api.day.app/${{ secrets.BARK_KEY }}/${TITLE}/${BODY}?url=https://hub.docker.com/r/${{ env.IMAGE_NAME }}"

@@ -203,4 +203,24 @@ export class FileManagementService {
         const dirPath = path.join(this.audioDir, podcastDir);
         return await fs.pathExists(dirPath);
     }
+
+    /**
+     * 删除整个播客目录
+     */
+    async deletePodcast(podcastDir: string): Promise<void> {
+        // 验证文件夹名称（防止特殊字符和路径穿越）
+        if (!podcastDir || podcastDir.includes('..') || podcastDir.includes('/') || podcastDir.includes('\\')) {
+            throw new Error('Invalid podcast directory name');
+        }
+
+        const dirPath = path.join(this.audioDir, podcastDir);
+
+        // 检查目录是否存在
+        if (!await fs.pathExists(dirPath)) {
+            throw new Error(`Podcast directory not found: ${podcastDir}`);
+        }
+
+        // 删除整个目录及其所有内容
+        await fs.remove(dirPath);
+    }
 }
