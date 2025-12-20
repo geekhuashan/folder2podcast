@@ -2,53 +2,6 @@ import { createSignal, createResource, Show, For } from 'solid-js';
 import { podcastsAPI } from '../utils/api';
 import { useToast } from './Toast';
 
-// 帮助提示组件
-function Tooltip(props) {
-  const [show, setShow] = createSignal(false);
-
-  return (
-    <div style={{ position: 'relative', display: 'inline-block', 'margin-left': '0.25rem' }}>
-      <span
-        style={{
-          display: 'inline-flex',
-          'align-items': 'center',
-          'justify-content': 'center',
-          width: '1rem',
-          height: '1rem',
-          'border-radius': '50%',
-          background: '#e5e7eb',
-          color: '#6b7280',
-          'font-size': '0.75rem',
-          cursor: 'help'
-        }}
-        onMouseEnter={() => setShow(true)}
-        onMouseLeave={() => setShow(false)}
-      >
-        ?
-      </span>
-      <Show when={show()}>
-        <div style={{
-          position: 'absolute',
-          bottom: '100%',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          'margin-bottom': '0.5rem',
-          padding: '0.5rem 0.75rem',
-          background: '#1f2937',
-          color: 'white',
-          'border-radius': '0.375rem',
-          'font-size': '0.75rem',
-          'white-space': 'nowrap',
-          'z-index': 1000,
-          'box-shadow': '0 4px 6px rgba(0,0,0,0.1)'
-        }}>
-          {props.text}
-        </div>
-      </Show>
-    </div>
-  );
-}
-
 // 语言选项
 const LANGUAGE_OPTIONS = [
   { value: 'zh-cn', label: '中文' },
@@ -86,7 +39,14 @@ export default function ConfigEditor(props) {
   const toast = useToast();
   const [config, { refetch }] = createResource(() => props.podcast.dirName, podcastsAPI.getConfig);
   const [saving, setSaving] = createSignal(false);
-  const [activeTab, setActiveTab] = createSignal('basic'); // basic, advanced
+
+  // 折叠状态
+  const [showAdvanced, setShowAdvanced] = createSignal(false);
+  const [showParsing, setShowParsing] = createSignal(false);
+
+  // 封面相关状态
+  const [uploading, setUploading] = createSignal(false);
+  const [coverImage, setCoverImage] = createSignal(null);
 
   // 表单字段 - Metadata
   const [title, setTitle] = createSignal('');
@@ -104,11 +64,22 @@ export default function ConfigEditor(props) {
   const [customPattern, setCustomPattern] = createSignal('');
   const [useMTime, setUseMTime] = createSignal(false);
 
+  // 获取封面文件列表
+  const loadCoverImage = async () => {
+    try {
+      const filesData = await podcastsAPI.getFiles(props.podcast.dirName);
+      const images = filesData?.data?.images || [];
+      const cover = images.find(img => /^cover\.(jpg|jpeg|png|gif|webp)$/i.test(img));
+      setCoverImage(cover || null);
+    } catch (error) {
+      console.error('Failed to load cover image:', error);
+    }
+  };
+
   // 当配置加载完成后，填充表单
   const initForm = () => {
     const cfg = config()?.data;
     if (cfg) {
-      // Metadata
       if (cfg.metadata) {
         setTitle(cfg.metadata.title || '');
         setDescription(cfg.metadata.description || '');
@@ -126,7 +97,6 @@ export default function ConfigEditor(props) {
         }
         setExplicit(cfg.metadata.explicit || false);
       }
-      // Parsing
       if (cfg.parsing) {
         const strategy = cfg.parsing.episodeNumberStrategy;
         if (typeof strategy === 'object' && strategy.pattern) {
@@ -139,49 +109,49 @@ export default function ConfigEditor(props) {
         setUseMTime(cfg.parsing.useMTime || false);
       }
     }
+    loadCoverImage();
   };
 
-  // 导出配置
-  const exportConfig = () => {
-    const fullConfig = buildConfig();
-    const json = JSON.stringify(fullConfig, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${props.podcast.dirName}-config.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  // 导入配置
-  const importConfig = async (event) => {
-    const file = event.target.files?.[0];
+  // 上传封面图片
+  const handleCoverUpload = async (e) => {
+    const file = e.target.files?.[0];
     if (!file) return;
 
+    if (!file.type.startsWith('image/')) {
+      toast.error('请选择图片文件');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('图片大小不能超过 5MB');
+      return;
+    }
+
+    setUploading(true);
     try {
-      const text = await file.text();
-      const imported = JSON.parse(text);
-
-      if (imported.metadata) {
-        setTitle(imported.metadata.title || '');
-        setDescription(imported.metadata.description || '');
-        setAuthor(imported.metadata.author || '');
-        setEmail(imported.metadata.email || '');
-        setWebsiteUrl(imported.metadata.websiteUrl || '');
-        setLanguage(imported.metadata.language || 'zh-cn');
-        setCategory(imported.metadata.category || 'Podcast');
-        setExplicit(imported.metadata.explicit || false);
-      }
-
-      if (imported.parsing) {
-        setEpisodeNumberStrategy(imported.parsing.episodeNumberStrategy || 'prefix');
-        setUseMTime(imported.parsing.useMTime || false);
-      }
-
-      toast.success('配置导入成功！');
+      const ext = file.name.split('.').pop().toLowerCase();
+      const coverFileName = `cover.${ext}`;
+      const renamedFile = new File([file], coverFileName, { type: file.type });
+      await podcastsAPI.uploadFile(props.podcast.dirName, renamedFile);
+      toast.success('封面上传成功！');
+      setCoverImage(coverFileName);
+      e.target.value = '';
     } catch (error) {
-      toast.error('导入失败：' + error.message);
+      toast.error(`上传失败: ${error.message}`);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // 删除封面图片
+  const handleDeleteCover = async () => {
+    if (!coverImage()) return;
+    try {
+      await podcastsAPI.deleteFile(props.podcast.dirName, coverImage());
+      toast.success('封面已删除');
+      setCoverImage(null);
+    } catch (error) {
+      toast.error(`删除失败: ${error.message}`);
     }
   };
 
@@ -213,7 +183,6 @@ export default function ConfigEditor(props) {
 
   // 保存配置
   const handleSave = async () => {
-    // 验证必填字段
     if (!title().trim()) {
       toast.error('播客标题不能为空');
       return;
@@ -234,226 +203,384 @@ export default function ConfigEditor(props) {
 
   return (
     <div class="modal-overlay" onClick={props.onClose}>
-      <div class="modal" onClick={(e) => e.stopPropagation()} style={{ 'max-width': '800px' }}>
-        <div style={{ padding: '1.5rem' }}>
-          {/* 标题栏 */}
-          <div style={{
-            display: 'flex',
-            'justify-content': 'space-between',
-            'align-items': 'center',
-            'margin-bottom': '1.5rem'
-          }}>
-            <h2 style={{ 'font-size': '1.5rem', 'font-weight': '700' }}>
+      <div
+        class="modal"
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          'max-width': '680px',
+          'max-height': '90vh',
+          display: 'flex',
+          'flex-direction': 'column',
+          background: 'linear-gradient(to bottom, #ffffff, #fafbfc)',
+          'border-radius': '20px',
+          overflow: 'hidden'
+        }}
+      >
+        {/* 头部 */}
+        <div style={{
+          display: 'flex',
+          'align-items': 'center',
+          'justify-content': 'space-between',
+          padding: '1.75rem 2rem',
+          'border-bottom': '1px solid rgba(0, 0, 0, 0.06)',
+          background: 'white'
+        }}>
+          <div>
+            <h2 style={{
+              margin: 0,
+              'font-size': '1.5rem',
+              'font-weight': '700',
+              color: 'var(--text)',
+              'line-height': '1.2'
+            }}>
               编辑播客配置
             </h2>
-            <button
-              class="btn"
-              style={{
-                background: 'transparent',
-                color: '#6b7280',
-                padding: '0.25rem'
-              }}
-              onClick={props.onClose}
-            >
-              ✕
-            </button>
+            <p style={{
+              margin: '0.25rem 0 0',
+              'font-size': '0.875rem',
+              color: 'var(--text-muted)'
+            }}>
+              {props.podcast.dirName}
+            </p>
           </div>
-
-          <Show
-            when={!config.loading}
-            fallback={
-              <div class="flex items-center gap-2">
-                <div class="spinner"></div> 加载中...
-              </div>
-            }
+          <button
+            style={{
+              width: '2.5rem',
+              height: '2.5rem',
+              display: 'flex',
+              'align-items': 'center',
+              'justify-content': 'center',
+              border: 'none',
+              background: 'var(--surface-soft)',
+              'border-radius': '10px',
+              color: 'var(--text-muted)',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease'
+            }}
+            onClick={props.onClose}
+            onMouseEnter={(e) => {
+              e.target.style.background = '#e5e7eb';
+              e.target.style.color = 'var(--text)';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.background = 'var(--surface-soft)';
+              e.target.style.color = 'var(--text-muted)';
+            }}
           >
-            {initForm()}
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
 
-            {/* 标签页导航 */}
+        <Show
+          when={!config.loading}
+          fallback={
             <div style={{
               display: 'flex',
-              'border-bottom': '2px solid #e5e7eb',
-              'margin-bottom': '1.5rem',
-              gap: '1rem'
+              'align-items': 'center',
+              'justify-content': 'center',
+              padding: '4rem',
+              gap: '0.75rem'
             }}>
-              <button
-                class="btn"
-                style={{
-                  background: 'transparent',
-                  color: activeTab() === 'basic' ? '#3b82f6' : '#6b7280',
-                  'border-bottom': activeTab() === 'basic' ? '2px solid #3b82f6' : 'none',
-                  'border-radius': 0,
-                  'margin-bottom': '-2px',
-                  'font-weight': activeTab() === 'basic' ? '600' : '400'
-                }}
-                onClick={() => setActiveTab('basic')}
-              >
-                基本设置
-              </button>
-              <button
-                class="btn"
-                style={{
-                  background: 'transparent',
-                  color: activeTab() === 'advanced' ? '#3b82f6' : '#6b7280',
-                  'border-bottom': activeTab() === 'advanced' ? '2px solid #3b82f6' : 'none',
-                  'border-radius': 0,
-                  'margin-bottom': '-2px',
-                  'font-weight': activeTab() === 'advanced' ? '600' : '400'
-                }}
-                onClick={() => setActiveTab('advanced')}
-              >
-                高级设置
-              </button>
+              <div class="spinner"></div>
+              <span style={{ color: 'var(--text-muted)' }}>加载配置中...</span>
             </div>
+          }
+        >
+          {initForm()}
 
-            {/* 标签页内容 */}
-            <div style={{ 'max-height': '60vh', 'overflow-y': 'auto', padding: '0.5rem' }}>
-              {/* 基本设置标签页 */}
-              <Show when={activeTab() === 'basic'}>
-                <div style={{ display: 'grid', gap: '1.5rem' }}>
-                  {/* 标题 */}
-                  <div>
-                    <label class="text-sm font-bold" style={{ display: 'flex', 'align-items': 'center', 'margin-bottom': '0.5rem' }}>
-                      播客标题 <span style={{ color: '#ef4444' }}>*</span>
-                      <Tooltip text="显示在播客客户端的播客名称" />
-                    </label>
-                    <input
-                      class="input"
-                      type="text"
-                      value={title()}
-                      onInput={(e) => setTitle(e.target.value)}
-                      placeholder="播客标题"
-                      required
-                    />
-                  </div>
+          {/* 内容区域 */}
+          <div style={{
+            flex: 1,
+            'overflow-y': 'auto',
+            padding: '1.5rem 2rem 2rem',
+            display: 'flex',
+            'flex-direction': 'column',
+            gap: '1.5rem'
+          }}>
+            {/* 封面卡片 */}
+            <div class="card" style={{
+              padding: '1.5rem',
+              background: 'white',
+              'border-radius': '16px',
+              border: '1px solid rgba(0, 0, 0, 0.06)'
+            }}>
+              <h3 style={{
+                margin: '0 0 1rem',
+                'font-size': '1rem',
+                'font-weight': '600',
+                color: 'var(--text)',
+                display: 'flex',
+                'align-items': 'center',
+                gap: '0.5rem'
+              }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                  <circle cx="8.5" cy="8.5" r="1.5"/>
+                  <polyline points="21 15 16 10 5 21"/>
+                </svg>
+                播客封面
+              </h3>
 
-                  {/* 描述 */}
-                  <div>
-                    <label class="text-sm font-bold" style={{ display: 'flex', 'align-items': 'center', 'margin-bottom': '0.5rem' }}>
-                      播客描述
-                      <Tooltip text="简要介绍播客内容，吸引听众订阅" />
-                    </label>
-                    <textarea
-                      class="input"
-                      value={description()}
-                      onInput={(e) => setDescription(e.target.value)}
-                      placeholder="播客描述"
-                      rows="4"
-                      style={{ resize: 'vertical' }}
-                    />
-                  </div>
-
-                  {/* 解析选项 */}
+              <Show
+                when={coverImage()}
+                fallback={
                   <div style={{
-                    background: '#f9fafb',
-                    padding: '1rem',
-                    'border-radius': '0.5rem',
-                    border: '1px solid #e5e7eb'
+                    display: 'flex',
+                    'flex-direction': 'column',
+                    'align-items': 'center',
+                    'justify-content': 'center',
+                    padding: '3rem 2rem',
+                    'border-radius': '12px',
+                    border: '2px dashed var(--border)',
+                    background: 'var(--surface-soft)',
+                    'text-align': 'center'
                   }}>
-                    <h3 style={{ 'font-weight': '600', 'margin-bottom': '1rem', 'font-size': '0.875rem' }}>
-                      🔧 文件解析规则
-                    </h3>
+                    <div style={{
+                      width: '4rem',
+                      height: '4rem',
+                      'border-radius': '12px',
+                      background: 'linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%)',
+                      display: 'flex',
+                      'align-items': 'center',
+                      'justify-content': 'center',
+                      'margin-bottom': '1rem'
+                    }}>
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                        <circle cx="8.5" cy="8.5" r="1.5"/>
+                        <polyline points="21 15 16 10 5 21"/>
+                      </svg>
+                    </div>
+                    <p style={{ color: 'var(--text)', 'font-weight': '500', 'margin-bottom': '0.5rem' }}>
+                      暂未上传封面图片
+                    </p>
+                    <p style={{ color: 'var(--text-muted)', 'font-size': '0.875rem', 'margin-bottom': '1.25rem' }}>
+                      建议使用 1400x1400 像素或更大的正方形图片
+                    </p>
+                    <label class="btn btn-primary" style={{ cursor: uploading() ? 'wait' : 'pointer' }}>
+                      <Show when={uploading()} fallback="上传封面">
+                        <div class="spinner" style={{ width: '1rem', height: '1rem' }}></div>
+                        上传中...
+                      </Show>
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                        style={{ display: 'none' }}
+                        onChange={handleCoverUpload}
+                        disabled={uploading()}
+                      />
+                    </label>
+                  </div>
+                }
+              >
+                <div style={{
+                  display: 'flex',
+                  gap: '1.5rem',
+                  'align-items': 'flex-start'
+                }}>
+                  <div style={{
+                    width: '140px',
+                    height: '140px',
+                    'border-radius': '12px',
+                    overflow: 'hidden',
+                    border: '1px solid rgba(0, 0, 0, 0.06)',
+                    'box-shadow': '0 4px 12px rgba(0, 0, 0, 0.08)',
+                    'flex-shrink': 0
+                  }}>
+                    <img
+                      src={`/audio/${encodeURIComponent(props.podcast.dirName)}/${encodeURIComponent(coverImage())}`}
+                      alt="封面预览"
+                      style={{ width: '100%', height: '100%', 'object-fit': 'cover' }}
+                    />
+                  </div>
 
-                    <div style={{ display: 'grid', gap: '1.5rem' }}>
-                      {/* 剧集序号提取策略 */}
-                      <div>
-                        <label class="text-sm font-bold" style={{ display: 'flex', 'align-items': 'center', 'margin-bottom': '0.5rem' }}>
-                          序号提取策略
-                          <Tooltip text="提取剧集序号并自动清理标题（去除序号部分）" />
-                        </label>
-                        <select
-                          class="input"
-                          value={episodeNumberStrategy()}
-                          onChange={(e) => setEpisodeNumberStrategy(e.target.value)}
-                        >
-                          <option value="prefix">前缀数字（推荐）- 看前5个字符，如 "01-标题" "[P25]标题" "第25集"</option>
-                          <option value="suffix">后缀数字 - 看后5个字符，如 "标题01" "标题-01" "标题 01"</option>
-                          <option value="date">日期格式 - 自动识别日期，如 "2024-01-15-标题" "日记20240115"</option>
-                          <option value="first">第一个数字 - 取第一个出现的数字（最宽松）</option>
-                          <option value="last">最后一个数字 - 取最后一个出现的数字</option>
-                          <option value="custom">自定义正则表达式</option>
-                        </select>
+                  <div style={{ flex: 1, display: 'flex', 'flex-direction': 'column', gap: '1rem' }}>
+                    <div>
+                      <div style={{ 'font-size': '0.75rem', color: 'var(--text-muted)', 'margin-bottom': '0.25rem', 'text-transform': 'uppercase', 'letter-spacing': '0.05em' }}>
+                        当前文件
+                      </div>
+                      <div style={{ 'font-size': '0.9375rem', 'font-weight': '500', color: 'var(--text)' }}>
+                        {coverImage()}
+                      </div>
+                    </div>
 
-                        <Show when={episodeNumberStrategy() === 'custom'}>
-                          <div style={{ 'margin-top': '0.5rem' }}>
-                            <input
-                              class="input"
-                              type="text"
-                              value={customPattern()}
-                              onInput={(e) => setCustomPattern(e.target.value)}
-                              placeholder="输入正则表达式，如 (\d+)"
-                            />
-                            <div style={{ 'font-size': '0.75rem', color: '#6b7280', 'margin-top': '0.25rem' }}>
-                              使用捕获组 () 提取数字，例如：(\d+) 匹配第一个数字
-                            </div>
-                          </div>
+                    <div style={{ display: 'flex', gap: '0.5rem', 'flex-wrap': 'wrap' }}>
+                      <label class="btn btn-soft" style={{ cursor: uploading() ? 'wait' : 'pointer' }}>
+                        <Show when={uploading()} fallback="更换封面">
+                          <div class="spinner" style={{ width: '1rem', height: '1rem' }}></div>
+                          上传中...
                         </Show>
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                          style={{ display: 'none' }}
+                          onChange={handleCoverUpload}
+                          disabled={uploading()}
+                        />
+                      </label>
 
-                        {/* 策略说明提示框 */}
-                        <div style={{
-                          'margin-top': '0.75rem',
-                          padding: '0.75rem',
-                          background: '#eff6ff',
-                          border: '1px solid #bfdbfe',
-                          'border-radius': '0.375rem',
-                          'font-size': '0.75rem',
-                          'line-height': '1.5'
-                        }}>
-                          <div style={{ 'font-weight': '600', 'margin-bottom': '0.5rem', color: '#1e40af' }}>
-                            💡 工作原理
-                          </div>
-                          <div style={{ color: '#1e3a8a' }}>
-                            <div style={{ 'margin-bottom': '0.5rem' }}>系统会根据你选择的策略提取序号，并<strong>自动清理</strong>标题中的序号部分：</div>
-                            <div>• <strong>提取成功</strong>：显示清理后的标题（如 "01-盗墓笔记.mp3" → "盗墓笔记"）</div>
-                            <div>• <strong>提取失败</strong>：保留完整文件名（不会修改原始文件）</div>
-                          </div>
-                        </div>
-                      </div>
+                      <button
+                        class="btn btn-soft"
+                        style={{ color: '#ef4444' }}
+                        onClick={handleDeleteCover}
+                        disabled={uploading()}
+                        onMouseEnter={(e) => e.target.style.background = '#fee2e2'}
+                        onMouseLeave={(e) => e.target.style.background = 'var(--surface-soft)'}
+                      >
+                        删除封面
+                      </button>
+                    </div>
 
-                      {/* 发布时间策略 */}
-                      <div>
-                        <label class="text-sm font-bold" style={{ display: 'flex', 'align-items': 'center', 'margin-bottom': '0.5rem' }}>
-                          发布时间策略
-                          <Tooltip text="决定剧集的发布时间来源" />
-                        </label>
-                        <label style={{ display: 'flex', 'align-items': 'center', cursor: 'pointer' }}>
-                          <input
-                            type="checkbox"
-                            checked={useMTime()}
-                            onChange={(e) => setUseMTime(e.target.checked)}
-                            style={{ 'margin-right': '0.5rem' }}
-                          />
-                          <span>使用文件修改时间</span>
-                          <span style={{ 'margin-left': '0.5rem', color: '#6b7280', 'font-size': '0.75rem' }}>
-                            （未勾选则按序号生成时间）
-                          </span>
-                        </label>
-                      </div>
+                    <div style={{
+                      'font-size': '0.8125rem',
+                      color: 'var(--text-muted)',
+                      padding: '0.75rem 1rem',
+                      background: '#eff6ff',
+                      'border-radius': '8px',
+                      border: '1px solid #dbeafe',
+                      'line-height': '1.5'
+                    }}>
+                      💡 建议尺寸 1400x1400 像素或更大，不超过 5MB
                     </div>
                   </div>
                 </div>
               </Show>
+            </div>
 
-              {/* 高级设置标签页 */}
-              <Show when={activeTab() === 'advanced'}>
-                <div style={{ display: 'grid', gap: '1.5rem' }}>
-                  {/* 元数据 */}
-                  <div style={{
-                    background: '#f9fafb',
-                    padding: '1rem',
-                    'border-radius': '0.5rem',
-                    border: '1px solid #e5e7eb'
+            {/* 基本信息卡片 */}
+            <div class="card" style={{
+              padding: '1.5rem',
+              background: 'white',
+              'border-radius': '16px',
+              border: '1px solid rgba(0, 0, 0, 0.06)'
+            }}>
+              <h3 style={{
+                margin: '0 0 1.25rem',
+                'font-size': '1rem',
+                'font-weight': '600',
+                color: 'var(--text)',
+                display: 'flex',
+                'align-items': 'center',
+                gap: '0.5rem'
+              }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 2v20M2 12h20"/>
+                </svg>
+                基本信息
+              </h3>
+
+              <div style={{ display: 'grid', gap: '1.25rem' }}>
+                {/* 标题 */}
+                <div>
+                  <label style={{
+                    display: 'block',
+                    'font-size': '0.875rem',
+                    'font-weight': '500',
+                    color: 'var(--text)',
+                    'margin-bottom': '0.5rem'
                   }}>
-                    <h3 style={{ 'font-weight': '600', 'margin-bottom': '1rem', 'font-size': '0.875rem' }}>
-                      📝 播客元数据
-                    </h3>
+                    播客标题 <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <input
+                    class="input"
+                    type="text"
+                    value={title()}
+                    onInput={(e) => setTitle(e.target.value)}
+                    placeholder="为你的播客起个名字"
+                    required
+                  />
+                </div>
 
-                    <div style={{ display: 'grid', gap: '1rem' }}>
-                      {/* 作者 */}
+                {/* 描述 */}
+                <div>
+                  <label style={{
+                    display: 'block',
+                    'font-size': '0.875rem',
+                    'font-weight': '500',
+                    color: 'var(--text)',
+                    'margin-bottom': '0.5rem'
+                  }}>
+                    播客描述
+                  </label>
+                  <textarea
+                    class="input"
+                    value={description()}
+                    onInput={(e) => setDescription(e.target.value)}
+                    placeholder="简要介绍你的播客内容..."
+                    rows="4"
+                    style={{ resize: 'vertical', 'min-height': '100px' }}
+                  />
+                </div>
+
+                {/* 高级设置折叠按钮 */}
+                <button
+                  type="button"
+                  onClick={() => setShowAdvanced(!showAdvanced())}
+                  style={{
+                    display: 'flex',
+                    'align-items': 'center',
+                    'justify-content': 'space-between',
+                    width: '100%',
+                    padding: '1rem',
+                    border: '1px solid var(--border)',
+                    'border-radius': '10px',
+                    background: 'var(--surface-soft)',
+                    color: 'var(--text)',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    'font-size': '0.9375rem',
+                    'font-weight': '500'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'var(--surface-soft)'}
+                >
+                  <div style={{ display: 'flex', 'align-items': 'center', gap: '0.5rem' }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="3"/>
+                      <path d="M12 1v6m0 6v6M5.64 5.64l4.24 4.24m4.24 4.24l4.24 4.24M1 12h6m6 0h6M5.64 18.36l4.24-4.24m4.24-4.24l4.24-4.24"/>
+                    </svg>
+                    <span>高级设置</span>
+                  </div>
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    style={{
+                      transition: 'transform 0.2s ease',
+                      transform: showAdvanced() ? 'rotate(180deg)' : 'rotate(0deg)'
+                    }}
+                  >
+                    <polyline points="6 9 12 15 18 9"/>
+                  </svg>
+                </button>
+
+                {/* 高级设置内容（可折叠） */}
+                <Show when={showAdvanced()}>
+                  <div style={{
+                    display: 'grid',
+                    gap: '1.25rem',
+                    padding: '1rem',
+                    'border-radius': '10px',
+                    background: 'var(--surface-soft)',
+                    border: '1px solid var(--border)'
+                  }}>
+                    {/* 作者和邮箱 */}
+                    <div style={{ display: 'grid', 'grid-template-columns': '1fr 1fr', gap: '1rem' }}>
                       <div>
-                        <label class="text-sm font-bold" style={{ display: 'flex', 'align-items': 'center', 'margin-bottom': '0.5rem' }}>
+                        <label style={{
+                          display: 'block',
+                          'font-size': '0.875rem',
+                          'font-weight': '500',
+                          color: 'var(--text)',
+                          'margin-bottom': '0.5rem'
+                        }}>
                           作者
-                          <Tooltip text="播客制作者或主播名称" />
                         </label>
                         <input
                           class="input"
@@ -464,11 +591,15 @@ export default function ConfigEditor(props) {
                         />
                       </div>
 
-                      {/* 邮箱 */}
                       <div>
-                        <label class="text-sm font-bold" style={{ display: 'flex', 'align-items': 'center', 'margin-bottom': '0.5rem' }}>
+                        <label style={{
+                          display: 'block',
+                          'font-size': '0.875rem',
+                          'font-weight': '500',
+                          color: 'var(--text)',
+                          'margin-bottom': '0.5rem'
+                        }}>
                           邮箱
-                          <Tooltip text="用于听众联系和 RSS feed 验证" />
                         </label>
                         <input
                           class="input"
@@ -478,159 +609,315 @@ export default function ConfigEditor(props) {
                           placeholder="email@example.com"
                         />
                       </div>
+                    </div>
 
-                      {/* 网站链接 */}
+                    {/* 网站链接 */}
+                    <div>
+                      <label style={{
+                        display: 'block',
+                        'font-size': '0.875rem',
+                        'font-weight': '500',
+                        color: 'var(--text)',
+                        'margin-bottom': '0.5rem'
+                      }}>
+                        网站链接
+                      </label>
+                      <input
+                        class="input"
+                        type="url"
+                        value={websiteUrl()}
+                        onInput={(e) => setWebsiteUrl(e.target.value)}
+                        placeholder="https://example.com"
+                      />
+                    </div>
+
+                    {/* 语言和分类 */}
+                    <div style={{ display: 'grid', 'grid-template-columns': '1fr 1fr', gap: '1rem' }}>
                       <div>
-                        <label class="text-sm font-bold" style={{ display: 'flex', 'align-items': 'center', 'margin-bottom': '0.5rem' }}>
-                          网站链接
-                          <Tooltip text="播客相关网站或主页" />
+                        <label style={{
+                          display: 'block',
+                          'font-size': '0.875rem',
+                          'font-weight': '500',
+                          color: 'var(--text)',
+                          'margin-bottom': '0.5rem'
+                        }}>
+                          语言
+                        </label>
+                        <select
+                          class="input"
+                          value={language()}
+                          onChange={(e) => setLanguage(e.target.value)}
+                        >
+                          <For each={LANGUAGE_OPTIONS}>
+                            {(lang) => <option value={lang.value}>{lang.label}</option>}
+                          </For>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label style={{
+                          display: 'block',
+                          'font-size': '0.875rem',
+                          'font-weight': '500',
+                          color: 'var(--text)',
+                          'margin-bottom': '0.5rem'
+                        }}>
+                          分类
+                        </label>
+                        <select
+                          class="input"
+                          value={category()}
+                          onChange={(e) => setCategory(e.target.value)}
+                        >
+                          <For each={CATEGORY_OPTIONS}>
+                            {(cat) => <option value={cat}>{cat}</option>}
+                          </For>
+                          <option value="custom">自定义...</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* 自定义分类 */}
+                    <Show when={category() === 'custom'}>
+                      <div>
+                        <label style={{
+                          display: 'block',
+                          'font-size': '0.875rem',
+                          'font-weight': '500',
+                          color: 'var(--text)',
+                          'margin-bottom': '0.5rem'
+                        }}>
+                          自定义分类
                         </label>
                         <input
                           class="input"
-                          type="url"
-                          value={websiteUrl()}
-                          onInput={(e) => setWebsiteUrl(e.target.value)}
-                          placeholder="https://example.com"
+                          type="text"
+                          value={customCategory()}
+                          onInput={(e) => setCustomCategory(e.target.value)}
+                          placeholder="输入自定义分类"
                         />
                       </div>
+                    </Show>
 
-                      {/* 语言和分类 */}
-                      <div style={{ display: 'grid', 'grid-template-columns': '1fr 1fr', gap: '1rem' }}>
-                        <div>
-                          <label class="text-sm font-bold" style={{ display: 'flex', 'align-items': 'center', 'margin-bottom': '0.5rem' }}>
-                            语言
-                            <Tooltip text="播客内容的主要语言" />
-                          </label>
-                          <select
-                            class="input"
-                            value={language()}
-                            onChange={(e) => setLanguage(e.target.value)}
-                          >
-                            <For each={LANGUAGE_OPTIONS}>
-                              {(lang) => <option value={lang.value}>{lang.label}</option>}
-                            </For>
-                          </select>
-                        </div>
-
-                        <div>
-                          <label class="text-sm font-bold" style={{ display: 'flex', 'align-items': 'center', 'margin-bottom': '0.5rem' }}>
-                            分类
-                            <Tooltip text="播客所属的类别" />
-                          </label>
-                          <select
-                            class="input"
-                            value={category()}
-                            onChange={(e) => setCategory(e.target.value)}
-                          >
-                            <For each={CATEGORY_OPTIONS}>
-                              {(cat) => <option value={cat}>{cat}</option>}
-                            </For>
-                            <option value="custom">自定义...</option>
-                          </select>
-                        </div>
-                      </div>
-
-                      {/* 自定义分类 */}
-                      <Show when={category() === 'custom'}>
-                        <div>
-                          <label class="text-sm font-bold" style={{ display: 'block', 'margin-bottom': '0.5rem' }}>
-                            自定义分类
-                          </label>
-                          <input
-                            class="input"
-                            type="text"
-                            value={customCategory()}
-                            onInput={(e) => setCustomCategory(e.target.value)}
-                            placeholder="输入自定义分类"
-                          />
-                        </div>
-                      </Show>
-
-                      {/* 敏感内容 */}
-                      <div>
-                        <label style={{ display: 'flex', 'align-items': 'center', cursor: 'pointer' }}>
-                          <input
-                            type="checkbox"
-                            checked={explicit()}
-                            onChange={(e) => setExplicit(e.target.checked)}
-                            style={{ 'margin-right': '0.5rem' }}
-                          />
-                          <span>此播客包含敏感内容</span>
-                          <Tooltip text="标记播客是否包含敏感或成人内容" />
-                        </label>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 导入导出 */}
-                  <div style={{
-                    background: '#f9fafb',
-                    padding: '1rem',
-                    'border-radius': '0.5rem',
-                    border: '1px solid #e5e7eb'
-                  }}>
-                    <h3 style={{ 'font-weight': '600', 'margin-bottom': '1rem', 'font-size': '0.875rem' }}>
-                      📦 导入/导出
-                    </h3>
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      <button
-                        class="btn"
+                    {/* 敏感内容 */}
+                    <label style={{
+                      display: 'flex',
+                      'align-items': 'center',
+                      gap: '0.75rem',
+                      cursor: 'pointer',
+                      padding: '1rem',
+                      'border-radius': '10px',
+                      background: 'white',
+                      border: '1px solid var(--border)',
+                      transition: 'background 0.2s ease'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = '#fafafa'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={explicit()}
+                        onChange={(e) => setExplicit(e.target.checked)}
                         style={{
-                          background: '#3b82f6',
-                          color: 'white',
-                          flex: 1
-                        }}
-                        onClick={exportConfig}
-                      >
-                        📥 导出配置
-                      </button>
-                      <label
-                        class="btn"
-                        style={{
-                          background: '#10b981',
-                          color: 'white',
-                          flex: 1,
+                          width: '1.125rem',
+                          height: '1.125rem',
                           cursor: 'pointer'
                         }}
-                      >
-                        📤 导入配置
+                      />
+                      <span style={{ 'font-size': '0.9375rem', 'font-weight': '500' }}>
+                        此播客包含敏感内容
+                      </span>
+                    </label>
+                  </div>
+                </Show>
+              </div>
+            </div>
+
+            {/* 解析设置卡片（可折叠） */}
+            <div class="card" style={{
+              padding: '1.5rem',
+              background: 'white',
+              'border-radius': '16px',
+              border: '1px solid rgba(0, 0, 0, 0.06)'
+            }}>
+              {/* 折叠按钮 */}
+              <button
+                type="button"
+                onClick={() => setShowParsing(!showParsing())}
+                style={{
+                  display: 'flex',
+                  'align-items': 'center',
+                  'justify-content': 'space-between',
+                  width: '100%',
+                  padding: '0',
+                  border: 'none',
+                  background: 'transparent',
+                  color: 'var(--text)',
+                  cursor: 'pointer',
+                  'font-size': '1rem',
+                  'font-weight': '600',
+                  'margin-bottom': showParsing() ? '1.25rem' : '0'
+                }}
+              >
+                <div style={{ display: 'flex', 'align-items': 'center', gap: '0.5rem' }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="16 18 22 12 16 6"/>
+                    <polyline points="8 6 2 12 8 18"/>
+                  </svg>
+                  <span>文件解析规则（高级）</span>
+                </div>
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  style={{
+                    transition: 'transform 0.2s ease',
+                    transform: showParsing() ? 'rotate(180deg)' : 'rotate(0deg)'
+                  }}
+                >
+                  <polyline points="6 9 12 15 18 9"/>
+                </svg>
+              </button>
+
+              {/* 解析设置内容（可折叠） */}
+              <Show when={showParsing()}>
+                <div style={{ display: 'grid', gap: '1.25rem' }}>
+                  {/* 序号提取策略 */}
+                  <div>
+                    <label style={{
+                      display: 'block',
+                      'font-size': '0.875rem',
+                      'font-weight': '500',
+                      color: 'var(--text)',
+                      'margin-bottom': '0.5rem'
+                    }}>
+                      序号提取策略
+                    </label>
+                    <select
+                      class="input"
+                      value={episodeNumberStrategy()}
+                      onChange={(e) => setEpisodeNumberStrategy(e.target.value)}
+                    >
+                      <option value="prefix">前缀数字 - 如 "01-标题" "[P25]标题"</option>
+                      <option value="suffix">后缀数字 - 如 "标题-01" "标题 01"</option>
+                      <option value="date">日期格式 - 如 "2024-01-15-标题"</option>
+                      <option value="first">第一个数字</option>
+                      <option value="last">最后一个数字</option>
+                      <option value="custom">自定义正则表达式</option>
+                    </select>
+
+                    <Show when={episodeNumberStrategy() === 'custom'}>
+                      <div style={{ 'margin-top': '0.75rem' }}>
                         <input
-                          type="file"
-                          accept=".json"
-                          style={{ display: 'none' }}
-                          onChange={importConfig}
+                          class="input"
+                          type="text"
+                          value={customPattern()}
+                          onInput={(e) => setCustomPattern(e.target.value)}
+                          placeholder="输入正则表达式，如 (\d+)"
                         />
-                      </label>
+                        <div style={{
+                          'font-size': '0.8125rem',
+                          color: 'var(--text-muted)',
+                          'margin-top': '0.5rem'
+                        }}>
+                          使用捕获组 () 提取数字，例如：(\d+) 匹配第一个数字
+                        </div>
+                      </div>
+                    </Show>
+
+                    <div style={{
+                      'margin-top': '0.75rem',
+                      padding: '1rem',
+                      background: '#eff6ff',
+                      'border-radius': '10px',
+                      border: '1px solid #dbeafe',
+                      'font-size': '0.8125rem',
+                      'line-height': '1.6',
+                      color: '#1e40af'
+                    }}>
+                      <div style={{ 'font-weight': '600', 'margin-bottom': '0.5rem' }}>
+                        💡 工作原理
+                      </div>
+                      <div>
+                        系统会根据策略提取序号并自动清理标题。提取成功后显示清理后的标题（如 "01-盗墓笔记.mp3" → "盗墓笔记"），提取失败则保留完整文件名。
+                      </div>
                     </div>
                   </div>
+
+                  {/* 发布时间策略 */}
+                  <label style={{
+                    display: 'flex',
+                    'align-items': 'center',
+                    gap: '0.75rem',
+                    cursor: 'pointer',
+                    padding: '1rem',
+                    'border-radius': '10px',
+                    background: 'var(--surface-soft)',
+                    transition: 'background 0.2s ease'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'var(--surface-soft)'}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={useMTime()}
+                      onChange={(e) => setUseMTime(e.target.checked)}
+                      style={{
+                        width: '1.125rem',
+                        height: '1.125rem',
+                        cursor: 'pointer'
+                      }}
+                    />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ 'font-size': '0.9375rem', 'font-weight': '500', 'margin-bottom': '0.25rem' }}>
+                        使用文件修改时间
+                      </div>
+                      <div style={{ 'font-size': '0.8125rem', color: 'var(--text-muted)' }}>
+                        未勾选则按序号生成发布时间
+                      </div>
+                    </div>
+                  </label>
                 </div>
               </Show>
             </div>
+          </div>
 
-            {/* 底部按钮 */}
-            <div class="flex gap-2" style={{ 'margin-top': '1.5rem', 'padding-top': '1rem', 'border-top': '1px solid #e5e7eb' }}>
-              <button
-                class="btn btn-primary"
-                style={{ flex: 1 }}
-                onClick={handleSave}
-                disabled={saving()}
-              >
-                <Show when={saving()} fallback="💾 保存配置">
-                  <div class="spinner" style={{ width: '1rem', height: '1rem' }}></div>
-                  保存中...
-                </Show>
-              </button>
-              <button
-                class="btn"
-                style={{ flex: 1, background: '#6b7280', color: 'white' }}
-                onClick={props.onClose}
-                disabled={saving()}
-              >
-                取消
-              </button>
-            </div>
-          </Show>
-        </div>
+          {/* 底部操作栏 */}
+          <div style={{
+            display: 'flex',
+            gap: '0.75rem',
+            padding: '1.25rem 2rem',
+            'border-top': '1px solid rgba(0, 0, 0, 0.06)',
+            background: 'white'
+          }}>
+            <button
+              class="btn"
+              style={{
+                flex: 1,
+                background: '#6b7280',
+                color: 'white'
+              }}
+              onClick={props.onClose}
+              disabled={saving()}
+            >
+              取消
+            </button>
+            <button
+              class="btn btn-primary"
+              style={{ flex: 1 }}
+              onClick={handleSave}
+              disabled={saving()}
+            >
+              <Show when={saving()} fallback="保存配置">
+                <div class="spinner" style={{ width: '1rem', height: '1rem' }}></div>
+                保存中...
+              </Show>
+            </button>
+          </div>
+        </Show>
       </div>
     </div>
   );

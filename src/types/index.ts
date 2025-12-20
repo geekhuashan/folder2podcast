@@ -95,6 +95,7 @@ export interface BilibiliDownloadRequest {
     podcastName?: string;           // 目标播客目录名（可选）
     episodeTitle?: string;          // 自定义剧集标题（可选）
     autoCreatePodcast?: boolean;    // 是否自动创建播客（默认 true）
+    selectPage?: string;            // 选择的分P页码（可选），如 "1,2,3" 或 "ALL"
 }
 
 /**

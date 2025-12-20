@@ -8,9 +8,12 @@ import {
     isValidBilibiliUrl,
     extractVideoId,
     buildBBDownArgs,
+    buildBBDownInfoArgs,
     extractFilePath,
     generatePodcastName,
-    extractEpisodeTitle
+    extractEpisodeTitle,
+    parseVideoInfo,
+    VideoInfo
 } from '../utils/bbdown';
 
 // 获取音频目录路径
@@ -25,6 +28,50 @@ const AUDIO_DIR = getEnvConfig().AUDIO_DIR;
  * - 业务逻辑委托给纯函数处理
  */
 export class BilibiliDownloadService {
+    /**
+     * 获取 B 站视频信息（包括分P列表）
+     *
+     * @param url - B 站视频 URL 或 ID
+     * @returns Promise<视频信息>
+     * @throws Error - 当 URL 无效或获取失败时抛出
+     */
+    async getVideoInfo(url: string): Promise<VideoInfo> {
+        // 1. 验证 URL
+        if (!isValidBilibiliUrl(url)) {
+            throw new Error(`无效的 B 站视频 URL: ${url}`);
+        }
+
+        // 提取视频 ID
+        const videoId = extractVideoId(url);
+        if (!videoId) {
+            throw new Error(`无法从 URL 中提取视频 ID: ${url}`);
+        }
+
+        // 2. 获取 BBDown 二进制路径
+        const bbdownPath = getBBDownPath();
+        await this.checkBBDownExists(bbdownPath);
+
+        // 3. 构建获取信息的参数
+        const args = buildBBDownInfoArgs(videoId);
+
+        console.log(`获取视频信息: ${videoId}`);
+        console.log(`执行命令: ${bbdownPath} ${args.join(' ')}`);
+
+        // 4. 执行 BBDown -info 命令
+        const output = await this.spawnBBDown(bbdownPath, args);
+
+        // 5. 解析输出获取视频信息
+        const videoInfo = parseVideoInfo(output, videoId);
+
+        if (!videoInfo) {
+            throw new Error('无法解析视频信息');
+        }
+
+        console.log(`视频信息获取成功: ${videoInfo.title}, 共 ${videoInfo.pages.length} 个分P`);
+
+        return videoInfo;
+    }
+
     /**
      * 下载 B 站视频并提取音频
      *
@@ -44,7 +91,8 @@ export class BilibiliDownloadService {
             url,
             podcastName,
             episodeTitle,
-            autoCreatePodcast = true
+            autoCreatePodcast = true,
+            selectPage
         } = request;
 
         // 1. 验证 URL（使用纯函数）
@@ -70,11 +118,15 @@ export class BilibiliDownloadService {
         console.log(`开始下载 B 站视频: ${videoId}`);
         console.log(`目标播客: ${targetPodcastName}`);
         console.log(`剧集标题: ${targetEpisodeTitle}`);
+        if (selectPage) {
+            console.log(`选择分P: ${selectPage}`);
+        }
 
         const downloadedFilePath = await this.executeBBDown(
             videoId,
             targetDir,
-            targetEpisodeTitle
+            targetEpisodeTitle,
+            selectPage
         );
 
         // 4. 构建返回结果（不可变数据）
@@ -163,6 +215,7 @@ export class BilibiliDownloadService {
      * @param videoId - 视频 ID
      * @param workDir - 工作目录
      * @param filePattern - 文件命名模板
+     * @param selectPage - 选择的分P页码（可选）
      * @returns Promise<下载的文件路径>
      * @throws Error - 下载失败时抛出
      * @private
@@ -170,7 +223,8 @@ export class BilibiliDownloadService {
     private async executeBBDown(
         videoId: string,
         workDir: string,
-        filePattern: string
+        filePattern: string,
+        selectPage?: string
     ): Promise<string> {
         // 1. 获取 BBDown 二进制路径（使用纯函数）
         const bbdownPath = getBBDownPath();
@@ -182,7 +236,8 @@ export class BilibiliDownloadService {
         const args = buildBBDownArgs({
             url: videoId,
             workDir,
-            filePattern
+            filePattern,
+            selectPage
         });
 
         console.log(`执行命令: ${bbdownPath} ${args.join(' ')}`);

@@ -114,12 +114,29 @@ export const extractVideoId = (url: string): string | null => {
 };
 
 /**
+ * 构建获取视频信息的 BBDown 参数数组
+ *
+ * @param url - B 站视频 URL 或 ID
+ * @returns 命令行参数数组
+ * @example
+ * buildBBDownInfoArgs('BV1qt4y1X7TW')
+ * // => ['BV1qt4y1X7TW', '-info']
+ */
+export const buildBBDownInfoArgs = (url: string): string[] => {
+    return [
+        url,        // 视频 URL 或 ID
+        '-info'     // 仅获取信息不下载
+    ];
+};
+
+/**
  * 构建 BBDown 命令行参数数组
  *
  * @param options - 下载选项
  * @param options.url - B 站视频 URL 或 ID
  * @param options.workDir - 下载目录路径
  * @param options.filePattern - 文件命名模板
+ * @param options.selectPage - 选择的分P页码（可选），如 "1,2,3" 或 "ALL"
  * @returns 命令行参数数组
  * @example
  * buildBBDownArgs({
@@ -128,22 +145,42 @@ export const extractVideoId = (url: string): string | null => {
  *   filePattern: '<videoTitle>'
  * })
  * // => ['BV1qt4y1X7TW', '--audio-only', '--work-dir', '/podcasts/我的播客', '-F', '<videoTitle>']
+ *
+ * @example
+ * buildBBDownArgs({
+ *   url: 'BV1qt4y1X7TW',
+ *   workDir: '/podcasts/我的播客',
+ *   filePattern: '<pageTitle>',
+ *   selectPage: '1,2,3'
+ * })
+ * // => ['BV1qt4y1X7TW', '--audio-only', '-p', '1,2,3', '--work-dir', '/podcasts/我的播客', '-F', '<pageTitle>']
  */
 export const buildBBDownArgs = (options: {
     url: string;
     workDir: string;
     filePattern: string;
+    selectPage?: string;
 }): string[] => {
-    const { url, workDir, filePattern } = options;
+    const { url, workDir, filePattern, selectPage } = options;
 
     // 构建参数数组
-    // 参数顺序: [视频URL, --audio-only, --work-dir, 目录, -F, 文件模板]
-    return [
+    const args: string[] = [
         url,                    // 视频 URL 或 ID (必需，放在第一位)
-        '--audio-only',         // 仅下载音频
+        '--audio-only'          // 仅下载音频
+    ];
+
+    // 如果指定了分P选择，添加 -p 参数
+    if (selectPage) {
+        args.push('-p', selectPage);
+    }
+
+    // 添加工作目录和文件模板
+    args.push(
         '--work-dir', workDir,  // 指定工作目录
         '-F', filePattern       // 文件命名模板
-    ];
+    );
+
+    return args;
 };
 
 /**
@@ -313,4 +350,209 @@ export const extractEpisodeTitle = (videoTitle: string): string => {
 
     // 3. 如果没有分隔符，返回完整标题
     return videoTitle.trim();
+};
+
+/**
+ * 视频分P信息接口
+ */
+export interface VideoPage {
+    /** 分P序号（从1开始） */
+    index: number;
+    /** 分P标题 */
+    title: string;
+    /** 时长（秒） */
+    duration?: number;
+}
+
+/**
+ * 视频信息接口
+ */
+export interface VideoInfo {
+    /** 视频BV号 */
+    bvid: string;
+    /** 视频标题 */
+    title: string;
+    /** 作者名称 */
+    author?: string;
+    /** 是否为多分P视频 */
+    isMultiPage: boolean;
+    /** 分P列表 */
+    pages: VideoPage[];
+}
+
+/**
+ * 从 BBDown 的 -info 输出中解析视频信息
+ *
+ * BBDown -info 输出格式示例:
+ * ```
+ * [2025-12-20 18:45:44.824] - 视频标题: 【4K60帧】咬人猫最新单曲《dududu》有没有戳中你心~【BML2020单品】
+ * [2025-12-20 18:45:44.824] - 发布时间: 2020-07-25 21:38:46 +08:00
+ * [2025-12-20 18:45:44.824] - UP主页: https://space.bilibili.com/403748305
+ * [2025-12-20 18:45:44.824] - P1: [220355130] [dududu] [03m46s]
+ * [2025-12-20 18:45:44.824] - P2: [220355131] [第二集] [05m20s]
+ * [2025-12-20 18:45:44.825] - 共计 2 个分P, 已选择：ALL
+ * ```
+ *
+ * 注意: BBDown 的 -info 输出在多P视频时只显示前几个和最后一个作为示例
+ *
+ * @param output - BBDown -info 命令的 stdout 输出
+ * @param videoId - 视频ID (BV号或AV号)，用于填充bvid字段
+ * @returns 视频信息对象，如果解析失败返回 null
+ */
+export const parseVideoInfo = (output: string, videoId?: string): VideoInfo | null => {
+    if (!output) {
+        return null;
+    }
+
+    try {
+        // 提取视频标题
+        const titleMatch = output.match(/- 视频标题[：:]\s*(.+?)$/m);
+        const title = titleMatch ? titleMatch[1].trim() : 'Unknown Title';
+
+        // 使用传入的 videoId，如果没有则尝试从输出中提取
+        let bvid = videoId || 'Unknown';
+        if (!videoId) {
+            const bvidMatch = output.match(/BV[a-zA-Z0-9]+/);
+            bvid = bvidMatch ? bvidMatch[0] : 'Unknown';
+        }
+
+        // 提取UP主ID（从UP主页链接）
+        const upMatch = output.match(/UP主页.*space\.bilibili\.com\/(\d+)/);
+        const author = upMatch ? `UP主 ${upMatch[1]}` : undefined;
+
+        // 提取总分P数量
+        // 格式: "共计 25 个分P, 已选择：ALL" 或 "共计 1 个分P, 已选择：ALL"
+        const totalPagesMatch = output.match(/共计\s*(\d+)\s*个分P/);
+        const totalPages = totalPagesMatch ? parseInt(totalPagesMatch[1], 10) : 1;
+
+        // 解析分P列表
+        // 格式: - P1: [220355130] [dududu] [03m46s]
+        // 或者: - P2: [220355131] [第二集] [05m20s]
+        // 注意: BBDown 在多P视频时只显示部分分P作为示例（前几个+最后一个）
+        const pages: VideoPage[] = [];
+        const pagePattern = /- P(\d+):\s*\[(\d+)\]\s*\[([^\]]+)\]\s*\[([^\]]+)\]/gm;
+        let pageMatch;
+
+        while ((pageMatch = pagePattern.exec(output)) !== null) {
+            const index = parseInt(pageMatch[1], 10);
+            const cid = pageMatch[2];
+            const pageTitle = pageMatch[3].trim();
+            const durationStr = pageMatch[4].trim(); // 如 "03m46s" 或 "1h05m20s"
+
+            // 解析时长字符串为秒数
+            let duration: number | undefined;
+            try {
+                duration = parseDurationString(durationStr);
+            } catch (e) {
+                // 解析失败，跳过时长
+                duration = undefined;
+            }
+
+            pages.push({
+                index,
+                title: pageTitle,
+                duration
+            });
+        }
+
+        // 如果没有找到分P信息，说明可能是单P视频
+        const isMultiPage = totalPages > 1;
+
+        if (pages.length === 0) {
+            // 单P视频，添加默认的P1，使用视频标题
+            pages.push({
+                index: 1,
+                title,
+                duration: undefined
+            });
+        }
+
+        // 如果总分P数大于解析到的分P数，说明BBDown只返回了部分示例
+        // 需要补全缺失的分P（使用占位信息）
+        if (totalPages > pages.length && isMultiPage) {
+            // 创建一个Set存储已有的分P索引
+            const existingIndexes = new Set(pages.map(p => p.index));
+
+            // 补全缺失的分P
+            for (let i = 1; i <= totalPages; i++) {
+                if (!existingIndexes.has(i)) {
+                    pages.push({
+                        index: i,
+                        title: `P${i}`,  // 使用占位标题
+                        duration: undefined
+                    });
+                }
+            }
+
+            // 按索引排序
+            pages.sort((a, b) => a.index - b.index);
+        }
+
+        return {
+            bvid,
+            title,
+            author,
+            isMultiPage,
+            pages
+        };
+    } catch (error) {
+        console.error('解析视频信息失败:', error);
+        return null;
+    }
+};
+
+/**
+ * 解析时长字符串为秒数
+ *
+ * 支持格式:
+ * - "03m46s" => 3*60 + 46 = 226秒
+ * - "1h05m20s" => 1*3600 + 5*60 + 20 = 3920秒
+ * - "45s" => 45秒
+ *
+ * @param durationStr - 时长字符串
+ * @returns 秒数
+ */
+function parseDurationString(durationStr: string): number {
+    let totalSeconds = 0;
+
+    // 提取小时
+    const hourMatch = durationStr.match(/(\d+)h/);
+    if (hourMatch) {
+        totalSeconds += parseInt(hourMatch[1], 10) * 3600;
+    }
+
+    // 提取分钟
+    const minMatch = durationStr.match(/(\d+)m/);
+    if (minMatch) {
+        totalSeconds += parseInt(minMatch[1], 10) * 60;
+    }
+
+    // 提取秒
+    const secMatch = durationStr.match(/(\d+)s/);
+    if (secMatch) {
+        totalSeconds += parseInt(secMatch[1], 10);
+    }
+
+    return totalSeconds;
+}
+
+/**
+ * 格式化时长（秒）为可读字符串
+ *
+ * @param seconds - 时长（秒）
+ * @returns 格式化的时长字符串，如 "10:30" 或 "1:05:20"
+ * @example
+ * formatDuration(630)  // => "10:30"
+ * formatDuration(3920) // => "1:05:20"
+ */
+export const formatDuration = (seconds: number): string => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+
+    if (hours > 0) {
+        return `${hours}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    } else {
+        return `${minutes}:${String(secs).padStart(2, '0')}`;
+    }
 };

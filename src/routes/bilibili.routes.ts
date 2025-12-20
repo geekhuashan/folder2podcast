@@ -7,6 +7,7 @@ import { BilibiliDownloadRequest } from '../types';
  * 注册 B 站视频下载相关路由
  *
  * 路由列表:
+ * - POST /api/bilibili/info - 获取 B 站视频信息（包括分P列表）
  * - POST /api/bilibili/download - 下载 B 站视频为音频
  *
  * @param server - Fastify 实例
@@ -19,6 +20,86 @@ export async function registerBilibiliRoutes(
     feedService: FeedService
 ): Promise<void> {
     /**
+     * POST /api/bilibili/info
+     * 获取 B 站视频信息（包括分P列表）
+     *
+     * 请求体:
+     * {
+     *   "url": "BV1qt4y1X7TW"  // 必需：B 站视频链接或 BV 号
+     * }
+     *
+     * 响应:
+     * {
+     *   "success": true,
+     *   "data": {
+     *     "bvid": "BV1qt4y1X7TW",
+     *     "title": "视频标题",
+     *     "author": "UP主名称",
+     *     "isMultiPage": true,
+     *     "pages": [
+     *       {
+     *         "index": 1,
+     *         "title": "第一集标题",
+     *         "duration": 630
+     *       }
+     *     ]
+     *   }
+     * }
+     */
+    server.post<{ Body: { url: string } }>(
+        '/api/bilibili/info',
+        async (request: FastifyRequest<{ Body: { url: string } }>, reply: FastifyReply) => {
+            try {
+                // 1. 验证必需参数
+                const { url } = request.body;
+                if (!url) {
+                    return reply.code(400).send({
+                        success: false,
+                        error: '缺少必需参数: url'
+                    });
+                }
+
+                // 2. 记录请求日志
+                server.log.info({
+                    action: 'bilibili_info_fetch',
+                    url
+                }, '获取 B 站视频信息');
+
+                // 3. 调用服务获取视频信息
+                const videoInfo = await bilibiliService.getVideoInfo(url);
+
+                server.log.info({
+                    action: 'bilibili_info_success',
+                    bvid: videoInfo.bvid,
+                    title: videoInfo.title,
+                    pageCount: videoInfo.pages.length
+                }, '视频信息获取成功');
+
+                // 4. 返回成功响应
+                return reply.code(200).send({
+                    success: true,
+                    data: videoInfo
+                });
+
+            } catch (error: any) {
+                // 错误处理
+                server.log.error({
+                    action: 'bilibili_info_error',
+                    error: error.message,
+                    stack: error.stack
+                }, 'B 站视频信息获取失败');
+
+                const statusCode = determineErrorStatusCode(error);
+
+                return reply.code(statusCode).send({
+                    success: false,
+                    error: error.message || '获取视频信息失败'
+                });
+            }
+        }
+    );
+
+    /**
      * POST /api/bilibili/download
      * 下载 B 站视频为音频并添加到播客
      *
@@ -27,7 +108,8 @@ export async function registerBilibiliRoutes(
      *   "url": "BV1qt4y1X7TW",              // 必需：B 站视频链接或 BV 号
      *   "podcastName": "我的播客",            // 可选：目标播客名称
      *   "episodeTitle": "第一集",            // 可选：自定义剧集标题
-     *   "autoCreatePodcast": true           // 可选：是否自动创建播客（默认 true）
+     *   "autoCreatePodcast": true,          // 可选：是否自动创建播客（默认 true）
+     *   "selectPage": "1,2,3"               // 可选：选择的分P页码，如 "1,2,3" 或 "ALL"
      * }
      *
      * 响应:
