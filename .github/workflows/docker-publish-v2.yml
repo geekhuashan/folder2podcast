@@ -75,7 +75,7 @@ jobs:
 
       # 可选：发送通知（如果配置了 Bark）
       - name: Send Bark notification
-        if: ${{ success() && secrets.BARK_KEY }}
+        if: success()
         continue-on-error: true
         run: |
           TITLE=$(echo -n "Docker镜像构建成功 (v2)" | jq -sRr @uri)
