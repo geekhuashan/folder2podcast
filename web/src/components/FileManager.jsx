@@ -107,17 +107,18 @@ export default function FileManager(props) {
   };
 
   return (
-    <div>
-      {/* 标题和操作按钮 */}
-      <div class="flex items-center justify-between mb-4">
-        <h2 style={{ 'font-size': '1.875rem', 'font-weight': '700' }}>
-          {props.podcast.title}
-        </h2>
-        <div class="flex gap-2">
-          <label class="btn btn-primary">
-            <Show when={uploading()} fallback="📤 上传文件">
+    <div class="stack-lg">
+      <div class="section-header">
+        <div>
+          <p class="eyebrow">正在管理</p>
+          <h2 style={{ margin: 0 }}>{props.podcast.title}</h2>
+          <p class="text-muted">目录：{props.podcast.dirName}</p>
+        </div>
+        <div class="hero-actions">
+          <label class="btn btn-primary" style={{ cursor: uploading() ? 'wait' : 'pointer' }}>
+            <Show when={uploading()} fallback={<span>📤 上传文件</span>}>
               <div class="spinner" style={{ width: '1rem', height: '1rem' }}></div>
-              上传中...
+              正在上传...
             </Show>
             <input
               type="file"
@@ -127,177 +128,117 @@ export default function FileManager(props) {
               disabled={uploading()}
             />
           </label>
-          <button
-            class="btn"
-            style={{ background: '#8b5cf6', color: 'white' }}
-            onClick={() => setShowConfigEditor(true)}
-          >
-            ⚙️ 配置
+          <button class="btn btn-soft" onClick={() => setShowConfigEditor(true)}>
+            ⚙️ 编辑配置
           </button>
         </div>
       </div>
 
-      {/* RSS 订阅区域 - 突出显示 */}
-      <div class="card" style={{
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-        color: 'white',
-        'margin-bottom': '1.5rem',
-        padding: '1.5rem'
-      }}>
-        <div style={{
-          display: 'flex',
-          'align-items': 'center',
-          'justify-content': 'space-between',
-          gap: '1rem',
-          'flex-wrap': 'wrap'
-        }}>
-          <div style={{ flex: 1, 'min-width': '200px' }}>
-            <div style={{
-              'font-size': '0.875rem',
-              'font-weight': '600',
-              'margin-bottom': '0.5rem',
-              opacity: 0.9
-            }}>
-              📡 RSS 订阅地址
-            </div>
-            <div style={{
-              'font-family': 'monospace',
-              'font-size': '0.875rem',
-              background: 'rgba(255, 255, 255, 0.2)',
-              padding: '0.5rem 0.75rem',
-              'border-radius': '0.375rem',
-              overflow: 'hidden',
-              'text-overflow': 'ellipsis',
-              'white-space': 'nowrap'
-            }}>
+      <div class="rss-panel">
+        <div style={{ display: 'flex', 'flex-wrap': 'wrap', gap: '1rem', 'align-items': 'center' }}>
+          <div style={{ flex: 1, 'min-width': '220px' }}>
+            <div class="field-label" style={{ color: 'rgba(255,255,255,0.8)' }}>RSS 订阅地址</div>
+            <div class="rss-url">
               {window.location.origin}/feeds/{encodeURIComponent(props.podcast.dirName)}.xml
             </div>
           </div>
-          <button
-            class="btn"
-            style={{
-              background: 'white',
-              color: '#667eea',
-              'font-weight': '600',
-              'flex-shrink': 0,
-              'min-width': '120px'
-            }}
-            onClick={handleCopyRSS}
-          >
-            {rssCopied() ? '✓ 已复制！' : '📋 复制链接'}
+          <button class="btn btn-secondary" onClick={handleCopyRSS}>
+            {rssCopied() ? '✓ 已复制' : '复制链接'}
           </button>
         </div>
-        <div style={{
-          'margin-top': '0.75rem',
-          'font-size': '0.75rem',
-          opacity: 0.9
-        }}>
-          💡 将此链接复制到播客客户端（如 Apple Podcasts、Pocket Casts 等）即可订阅
-        </div>
+        <p style={{ margin: '0.75rem 0 0', 'font-size': '0.85rem', opacity: 0.85 }}>
+          将该链接添加到任意播客客户端即可订阅此目录内容。
+        </p>
       </div>
 
-      {/* 文件列表 */}
       <Show
         when={!files.loading}
-        fallback={<div class="flex items-center gap-2"><div class="spinner"></div> 加载中...</div>}
+        fallback={<div class="flex items-center gap-2"><div class="spinner"></div> 加载文件中...</div>}
       >
-        <div style={{ display: 'grid', gap: '1rem' }}>
-          {/* 音频文件 */}
-          <Show when={files()?.data?.audio?.length > 0}>
-            <div class="card">
-              <h3 class="font-bold mb-2">🎵 音频文件 ({files()?.data?.audio?.length || 0})</h3>
-              <div style={{ display: 'grid', gap: '0.5rem' }}>
-                <For each={files()?.data?.audio || []}>
-                  {(fileName) => (
-                    <div class="flex items-center justify-between" style={{
-                      padding: '0.75rem',
-                      background: '#f9fafb',
-                      'border-radius': '0.375rem'
-                    }}>
+        <div class="file-section">
+          <Show when={files()?.data?.audio?.length > 0} fallback={
+            <div class="empty-state">
+              <p>暂未上传音频文件</p>
+              <p class="text-sm">支持拖入 MP3/M4A/FLAC 等常见格式，上传后自动生成 RSS。</p>
+            </div>
+          }>
+            <section class="file-card">
+              <div class="section-header" style={{ 'align-items': 'center', 'margin-bottom': '1rem' }}>
+                <div>
+                  <h3 style={{ margin: 0 }}>🎵 音频文件</h3>
+                  <p class="text-muted">{files()?.data?.audio?.length || 0} 个文件</p>
+                </div>
+              </div>
+              <For each={files()?.data?.audio || []}>
+                {(fileName) => (
+                  <div class={`file-row ${renaming() === fileName ? 'is-editing' : ''}`}>
+                    <Show
+                      when={renaming() === fileName}
+                      fallback={<span class="file-row__name">{fileName}</span>}
+                    >
+                      <input
+                        class="input"
+                        value={newFileName()}
+                        onInput={(e) => setNewFileName(e.target.value)}
+                        onKeyPress={(e) => e.key === 'Enter' && confirmRename()}
+                      />
+                    </Show>
+                    <div class="file-actions">
                       <Show
                         when={renaming() === fileName}
-                        fallback={<span style={{ flex: 1 }}>{fileName}</span>}
+                        fallback={
+                          <>
+                            <button class="btn btn-sm btn-soft" onClick={() => handlePlay(fileName)}>
+                              ▶️ 试听
+                            </button>
+                            <button class="btn btn-sm btn-soft" onClick={() => startRename(fileName)}>
+                              ✏️ 重命名
+                            </button>
+                            <button class="btn btn-sm btn-danger" onClick={() => handleDelete(fileName)}>
+                              🗑️ 删除
+                            </button>
+                          </>
+                        }
                       >
-                        <input
-                          class="input"
-                          style={{ flex: 1, 'margin-right': '0.5rem' }}
-                          value={newFileName()}
-                          onInput={(e) => setNewFileName(e.target.value)}
-                          onKeyPress={(e) => e.key === 'Enter' && confirmRename()}
-                        />
+                        <button class="btn btn-sm btn-primary" onClick={confirmRename}>
+                          ✓ 确认
+                        </button>
+                        <button class="btn btn-sm btn-soft" onClick={() => setRenaming(null)}>
+                          ✕ 取消
+                        </button>
                       </Show>
-                      <div class="flex gap-2">
-                        <Show
-                          when={renaming() === fileName}
-                          fallback={
-                            <>
-                              <button
-                                class="btn btn-sm"
-                                style={{ background: '#10b981', color: 'white' }}
-                                onClick={() => handlePlay(fileName)}
-                              >
-                                ▶️ 播放
-                              </button>
-                              <button
-                                class="btn btn-sm"
-                                style={{ background: '#f59e0b', color: 'white' }}
-                                onClick={() => startRename(fileName)}
-                              >
-                                ✏️ 重命名
-                              </button>
-                              <button
-                                class="btn btn-sm btn-danger"
-                                onClick={() => handleDelete(fileName)}
-                              >
-                                🗑️ 删除
-                              </button>
-                            </>
-                          }
-                        >
-                          <button class="btn btn-sm btn-primary" onClick={confirmRename}>
-                            ✓ 确认
-                          </button>
-                          <button class="btn btn-sm" onClick={() => setRenaming(null)}>
-                            ✕ 取消
-                          </button>
-                        </Show>
-                      </div>
                     </div>
-                  )}
-                </For>
-              </div>
-            </div>
+                  </div>
+                )}
+              </For>
+            </section>
           </Show>
 
-          {/* 图片文件 */}
           <Show when={files()?.data?.images?.length > 0}>
-            <div class="card">
-              <h3 class="font-bold mb-2">🖼️ 图片文件 ({files()?.data?.images?.length || 0})</h3>
-              <div style={{ display: 'grid', gap: '0.5rem' }}>
-                <For each={files()?.data?.images || []}>
-                  {(fileName) => (
-                    <div class="flex items-center justify-between" style={{
-                      padding: '0.75rem',
-                      background: '#f9fafb',
-                      'border-radius': '0.375rem'
-                    }}>
-                      <span style={{ flex: 1 }}>{fileName}</span>
-                      <button
-                        class="btn btn-sm btn-danger"
-                        onClick={() => handleDelete(fileName)}
-                      >
+            <section class="file-card">
+              <div class="section-header" style={{ 'align-items': 'center', 'margin-bottom': '1rem' }}>
+                <div>
+                  <h3 style={{ margin: 0 }}>🖼️ 图片文件</h3>
+                  <p class="text-muted">{files()?.data?.images?.length || 0} 张</p>
+                </div>
+              </div>
+              <For each={files()?.data?.images || []}>
+                {(fileName) => (
+                  <div class="file-row">
+                    <span class="file-row__name">{fileName}</span>
+                    <div class="file-actions">
+                      <button class="btn btn-sm btn-danger" onClick={() => handleDelete(fileName)}>
                         🗑️ 删除
                       </button>
                     </div>
-                  )}
-                </For>
-              </div>
-            </div>
+                  </div>
+                )}
+              </For>
+            </section>
           </Show>
         </div>
       </Show>
 
-      {/* 配置编辑器模态框 */}
       <Show when={showConfigEditor()}>
         <ConfigEditor
           podcast={props.podcast}
@@ -305,7 +246,6 @@ export default function FileManager(props) {
         />
       </Show>
 
-      {/* 音频播放器 */}
       <Show when={playingAudio()}>
         <AudioPlayer
           audio={playingAudio()}

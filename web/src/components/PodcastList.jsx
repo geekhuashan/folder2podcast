@@ -1,7 +1,6 @@
 import { createSignal, createResource, For, Show } from 'solid-js';
 import { podcastsAPI } from '../utils/api';
 import CreatePodcastModal from './CreatePodcastModal';
-import BilibiliDownload from './BilibiliDownload';
 import { useToast } from './Toast';
 
 // 复制到剪贴板功能
@@ -47,164 +46,90 @@ export default function PodcastList(props) {
   };
 
   return (
-    <div>
-      {/* B 站视频下载组件 - 首页重要功能 */}
-      <BilibiliDownload
-        podcasts={podcasts()?.data || []}
-        onTaskAdded={() => {
-          // 任务添加后延迟刷新播客列表（给下载一点时间）
-          setTimeout(refetch, 2000);
-        }}
-      />
-
-      <div style={{
-        display: 'flex',
-        'justify-content': 'space-between',
-        'align-items': 'center',
-        'margin-bottom': '1.5rem'
-      }}>
-        <h2 style={{
-          'font-size': '1.875rem',
-          'font-weight': '700'
-        }}>
-          播客列表
-        </h2>
-        <button
-          class="btn btn-primary"
-          onClick={() => setShowCreateModal(true)}
-        >
-          + 创建新播客
-        </button>
-      </div>
-
-      <Show
-        when={!podcasts.loading}
-        fallback={
-          <div class="flex items-center justify-center" style={{ padding: '3rem' }}>
-            <div class="spinner"></div>
-            <span style={{ 'margin-left': '0.5rem' }}>加载中...</span>
+    <>
+      <section class="section-card">
+        <div class="section-header">
+          <div>
+            <p class="eyebrow">Podcasts</p>
+            <h2>播客列表</h2>
+            <p class="text-muted" style={{ 'max-width': '520px' }}>
+              为不同的音频专辑创建独立的目录。点击卡片可进入文件管理，以便上传音频、更新封面或编辑配置。
+            </p>
           </div>
-        }
-      >
+          <button
+            class="btn btn-primary"
+            onClick={() => setShowCreateModal(true)}
+          >
+            + 创建新播客
+          </button>
+        </div>
+
         <Show
-          when={podcasts()?.data?.length > 0}
+          when={!podcasts.loading}
           fallback={
-            <div class="card" style={{ 'text-align': 'center', padding: '3rem' }}>
-              <p class="text-secondary">暂无播客</p>
+            <div class="flex items-center justify-center" style={{ padding: '2.5rem 0' }}>
+              <div class="spinner"></div>
+              <span style={{ 'margin-left': '0.5rem' }}>正在获取播客...</span>
             </div>
           }
         >
-          <div style={{
-            display: 'grid',
-            'grid-template-columns': 'repeat(auto-fill, minmax(300px, 1fr))',
-            gap: '1.5rem'
-          }}>
-            <For each={podcasts()?.data || []}>
-              {(podcast) => (
-                <div
-                  class="card"
-                  style={{
-                    cursor: 'pointer',
-                    transition: 'transform 0.2s, box-shadow 0.2s',
-                    display: 'flex',
-                    'flex-direction': 'column'
-                  }}
-                  onClick={() => props.onSelect(podcast)}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = 'translateY(-4px)';
-                    e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(0, 0, 0, 0.1)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = 'translateY(0)';
-                    e.currentTarget.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.1)';
-                  }}
-                >
-                  <h3 style={{
-                    'font-size': '1.25rem',
-                    'font-weight': '600',
-                    'margin-bottom': '0.5rem'
-                  }}>
-                    {podcast.title}
-                  </h3>
-                  <p class="text-secondary text-sm" style={{
-                    'margin-bottom': '1rem',
-                    overflow: 'hidden',
-                    'text-overflow': 'ellipsis',
-                    display: '-webkit-box',
-                    '-webkit-line-clamp': '2',
-                    '-webkit-box-orient': 'vertical',
-                    flex: 1
-                  }}>
-                    {podcast.description}
-                  </p>
+          <Show
+            when={podcasts()?.data?.length > 0}
+            fallback={
+              <div class="card" style={{ 'text-align': 'center' }}>
+                <p class="text-muted" style={{ 'margin-bottom': '0.5rem' }}>暂未创建任何播客</p>
+                <p class="text-sm text-secondary">
+                  点击右上角按钮立刻创建第一个播客目录。
+                </p>
+              </div>
+            }
+          >
+            <div class="card-grid">
+              <For each={podcasts()?.data || []}>
+                {(podcast) => (
+                  <article
+                    class="podcast-card"
+                    onClick={() => props.onSelect(podcast)}
+                  >
+                    <div class="status-pill">
+                      🎧 {podcast.episodeCount} 集
+                    </div>
+                    <h3>{podcast.title}</h3>
+                    <p>
+                      {podcast.description || '尚未填写描述，点击进入可在配置中完善。'}
+                    </p>
 
-                  {/* RSS 链接区域 */}
-                  <div style={{
-                    background: '#f9fafb',
-                    border: '1px solid #e5e7eb',
-                    'border-radius': '0.375rem',
-                    padding: '0.75rem',
-                    'margin-bottom': '0.75rem'
-                  }}>
-                    <div style={{
-                      display: 'flex',
-                      'align-items': 'center',
-                      'justify-content': 'space-between',
-                      gap: '0.5rem'
-                    }}>
-                      <div style={{ flex: 1, 'min-width': 0 }}>
-                        <div style={{
-                          'font-size': '0.75rem',
-                          color: '#6b7280',
-                          'margin-bottom': '0.25rem'
-                        }}>
+                    <div class="podcast-card__rss">
+                      <div style={{ flex: 1 }}>
+                        <div class="text-sm text-muted" style={{ 'margin-bottom': '0.2rem' }}>
                           RSS 订阅地址
                         </div>
-                        <div style={{
-                          'font-family': 'monospace',
-                          'font-size': '0.75rem',
-                          color: '#374151',
-                          overflow: 'hidden',
-                          'text-overflow': 'ellipsis',
-                          'white-space': 'nowrap'
-                        }}>
-                          /feeds/{podcast.dirName}.xml
-                        </div>
+                        <div class="rss-chip">/feeds/{podcast.dirName}.xml</div>
                       </div>
                       <button
-                        class="btn btn-primary btn-sm"
+                        class="btn btn-soft btn-sm"
                         onClick={(e) => handleCopyRSS(podcast, e)}
-                        style={{
-                          'flex-shrink': 0,
-                          'min-width': '70px'
-                        }}
                       >
-                        {copiedPodcast() === podcast.dirName ? '✓ 已复制' : '📋 复制'}
+                        {copiedPodcast() === podcast.dirName ? '✓ 已复制' : '复制'}
                       </button>
                     </div>
-                  </div>
 
-                  <div class="flex items-center justify-between">
-                    <span class="text-sm text-secondary">
-                      {podcast.episodeCount} 集
-                    </span>
-                    <span class="text-sm" style={{ color: '#3b82f6' }}>
-                      管理 →
-                    </span>
-                  </div>
-                </div>
-              )}
-            </For>
-          </div>
+                    <div class="card-footer">
+                      <span>目录：{podcast.dirName}</span>
+                      <span style={{ color: 'var(--primary)' }}>管理 →</span>
+                    </div>
+                  </article>
+                )}
+              </For>
+            </div>
+          </Show>
         </Show>
-      </Show>
-
-      {/* 创建播客模态框 */}
+      </section>
       <CreatePodcastModal
         show={showCreateModal()}
         onClose={() => setShowCreateModal(false)}
         onSuccess={handleCreateSuccess}
       />
-    </div>
+    </>
   );
 }

@@ -140,284 +140,115 @@ export default function BilibiliDownload(props) {
   };
 
   return (
-    <div style={{
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-      'border-radius': '12px',
-      padding: '2rem',
-      'margin-bottom': '2rem',
-      color: 'white',
-      'box-shadow': '0 10px 30px rgba(0,0,0,0.2)'
-    }}>
-      {/* 标题 */}
-      <div style={{ 'margin-bottom': '1.5rem' }}>
-        <h2 style={{
-          'font-size': '1.5rem',
-          'font-weight': '700',
-          margin: '0 0 0.5rem 0',
-          display: 'flex',
-          'align-items': 'center',
-          gap: '0.5rem'
-        }}>
-          🎬 视频下载
-        </h2>
-        <p style={{
-          margin: 0,
-          opacity: 0.9,
-          'font-size': '0.9rem'
-        }}>
-          支持多个视频平台，自动下载音频并添加到播客
-        </p>
+    <section class="section-card download-panel">
+      <div class="section-header">
+        <div>
+          <p class="eyebrow">Video Import</p>
+          <h2 style={{ margin: 0 }}>视频下载与导入</h2>
+          <p>粘贴链接、选择播客即可自动下载音频并推送到目录，进度会同步到右下角任务窗口。</p>
+        </div>
       </div>
 
-      {/* 平台选项卡 */}
-      <div style={{
-        display: 'flex',
-        gap: '0.5rem',
-        'margin-bottom': '1.5rem',
-        'border-bottom': '2px solid rgba(255,255,255,0.2)',
-        'padding-bottom': '0.5rem'
-      }}>
+      <div class="platform-tabs">
         <For each={VIDEO_PLATFORMS}>
           {(platform) => (
             <button
               type="button"
+              class={`platform-tab ${activePlatform() === platform.id ? 'is-active' : ''} ${platform.enabled ? '' : 'is-disabled'}`}
               onClick={() => handlePlatformSwitch(platform.id)}
-              disabled={!platform.enabled}
-              style={{
-                background: activePlatform() === platform.id
-                  ? 'rgba(255,255,255,0.25)'
-                  : 'transparent',
-                border: 'none',
-                color: platform.enabled ? 'white' : 'rgba(255,255,255,0.4)',
-                padding: '0.75rem 1.5rem',
-                'border-radius': '8px 8px 0 0',
-                cursor: platform.enabled ? 'pointer' : 'not-allowed',
-                'font-size': '0.95rem',
-                'font-weight': activePlatform() === platform.id ? '600' : '500',
-                transition: 'all 0.3s',
-                display: 'flex',
-                'align-items': 'center',
-                gap: '0.5rem',
-                opacity: platform.enabled ? 1 : 0.5,
-                'border-bottom': activePlatform() === platform.id
-                  ? '3px solid rgba(255,255,255,0.8)'
-                  : '3px solid transparent',
-                'margin-bottom': '-2px'
-              }}
-              onMouseEnter={(e) => {
-                if (platform.enabled && activePlatform() !== platform.id) {
-                  e.currentTarget.style.background = 'rgba(255,255,255,0.15)';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (activePlatform() !== platform.id) {
-                  e.currentTarget.style.background = 'transparent';
-                }
-              }}
             >
-              <span style={{ 'font-size': '1.2rem' }}>{platform.icon}</span>
+              <span>{platform.icon}</span>
               <span>{platform.name}</span>
-              {!platform.enabled && (
-                <span style={{
-                  'font-size': '0.7rem',
-                  background: 'rgba(255,255,255,0.2)',
-                  padding: '0.15rem 0.5rem',
-                  'border-radius': '10px'
-                }}>
-                  即将推出
-                </span>
-              )}
+              <Show when={!platform.enabled}>
+                <span style={{ fontSize: '0.75rem' }}>Soon</span>
+              </Show>
             </button>
           )}
         </For>
       </div>
 
-      {/* 下载表单 */}
-      <form onSubmit={handleAddTask}>
-        {/* 主要输入区域 - 一行显示 */}
-        <div style={{
-          display: 'grid',
-          'grid-template-columns': '2fr 1.5fr auto',
-          gap: '1rem',
-          'align-items': 'end',
-          '@media (max-width: 768px)': {
-            'grid-template-columns': '1fr'
-          }
-        }}>
-          {/* 视频地址输入 */}
+      <form onSubmit={handleAddTask} style={{ display: 'flex', 'flex-direction': 'column', gap: '1.25rem' }}>
+        <div class="form-grid">
           <div>
-            <label style={{
-              display: 'block',
-              'margin-bottom': '0.5rem',
-              'font-size': '0.9rem',
-              'font-weight': '500'
-            }}>
-              视频地址 *
-            </label>
+            <div class="field-label">视频链接</div>
             <input
               type="text"
+              class="input"
+              placeholder={getCurrentPlatform().placeholder}
               value={url()}
               onInput={(e) => setUrl(e.target.value)}
-              placeholder={getCurrentPlatform()?.placeholder || '视频地址'}
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                border: 'none',
-                'border-radius': '6px',
-                'font-size': '0.95rem',
-                background: 'rgba(255,255,255,0.9)',
-                color: '#333'
-              }}
             />
           </div>
-
-          {/* 播客选择 */}
           <div>
-            <label style={{
-              display: 'block',
-              'margin-bottom': '0.5rem',
-              'font-size': '0.9rem',
-              'font-weight': '500'
-            }}>
-              目标播客 *
-            </label>
+            <div class="field-label">目标播客</div>
             <select
               value={selectedPodcast()}
               onChange={(e) => setSelectedPodcast(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                border: 'none',
-                'border-radius': '6px',
-                'font-size': '0.95rem',
-                background: 'rgba(255,255,255,0.9)',
-                color: '#333',
-                cursor: 'pointer'
-              }}
             >
-              <option value="">-- 选择播客 --</option>
-              <Show when={props.podcasts}>
-                <For each={props.podcasts}>
-                  {(podcast) => (
-                    <option value={podcast.dirName}>
-                      {podcast.title} ({podcast.episodeCount} 集)
-                    </option>
-                  )}
-                </For>
-              </Show>
+              <option value="">请选择播客</option>
+              <For each={props.podcasts}>
+                {(podcast) => (
+                  <option value={podcast.dirName}>
+                    {podcast.title} ({podcast.episodeCount || 0} 集)
+                  </option>
+                )}
+              </For>
             </select>
           </div>
-
-          {/* 添加任务按钮 */}
-          <button
-            type="submit"
-            disabled={!canSubmit()}
-            class="btn"
-            style={{
-              background: canSubmit()
-                ? 'rgba(255,255,255,0.9)'
-                : 'rgba(255,255,255,0.3)',
-              color: canSubmit() ? '#667eea' : 'rgba(255,255,255,0.6)',
-              border: 'none',
-              padding: '0.75rem 2rem',
-              'border-radius': '6px',
-              'font-weight': '600',
-              'font-size': '1rem',
-              cursor: canSubmit() ? 'pointer' : 'not-allowed',
-              transition: 'all 0.3s',
-              'box-shadow': canSubmit() ? '0 4px 10px rgba(0,0,0,0.1)' : 'none',
-              'white-space': 'nowrap'
-            }}
-          >
-            ➕ 添加任务
-          </button>
         </div>
 
-        {/* 高级选项 - 可折叠 */}
-        <div style={{ 'margin-top': '1rem' }}>
+        <div style={{ display: 'flex', 'justify-content': 'space-between', 'align-items': 'center', gap: '1rem', 'flex-wrap': 'wrap' }}>
+          <div>
+            <div class="field-label" style={{ margin: 0 }}>高级选项</div>
+            <p class="text-sm" style={{ margin: 0 }}>
+              自定义剧集标题，可覆盖下载源的默认标题。
+            </p>
+          </div>
           <button
             type="button"
+            class="btn btn-soft btn-sm"
             onClick={() => setShowAdvanced(!showAdvanced())}
-            style={{
-              background: 'rgba(255,255,255,0.15)',
-              border: 'none',
-              color: 'white',
-              padding: '0.5rem 1rem',
-              'border-radius': '6px',
-              cursor: 'pointer',
-              'font-size': '0.85rem',
-              display: 'flex',
-              'align-items': 'center',
-              gap: '0.5rem'
-            }}
           >
-            {showAdvanced() ? '▼' : '▶'} 高级选项
+            {showAdvanced() ? '收起' : '展开'}高级选项
           </button>
-
-          <Show when={showAdvanced()}>
-            <div style={{
-              'margin-top': '1rem',
-              padding: '1rem',
-              background: 'rgba(255,255,255,0.1)',
-              'border-radius': '6px'
-            }}>
-              <label style={{
-                display: 'block',
-                'margin-bottom': '0.5rem',
-                'font-size': '0.9rem',
-                'font-weight': '500'
-              }}>
-                自定义剧集标题（可选）
-              </label>
-              <input
-                type="text"
-                value={episodeTitle()}
-                onInput={(e) => setEpisodeTitle(e.target.value)}
-                placeholder="默认使用视频标题"
-                style={{
-                  width: '100%',
-                  padding: '0.75rem',
-                  border: 'none',
-                  'border-radius': '6px',
-                  'font-size': '0.95rem',
-                  background: 'rgba(255,255,255,0.9)',
-                  color: '#333'
-                }}
-              />
-              <div style={{
-                'margin-top': '0.5rem',
-                'font-size': '0.8rem',
-                opacity: 0.8
-              }}>
-                💡 留空则自动使用视频的原始标题
-              </div>
-            </div>
-          </Show>
         </div>
-      </form>
 
-      {/* 使用提示 */}
-      <Show when={getCurrentPlatform()?.tips?.length > 0}>
-        <div style={{
-          'margin-top': '1.5rem',
-          'padding-top': '1.5rem',
-          'border-top': '1px solid rgba(255,255,255,0.2)',
-          'font-size': '0.85rem',
-          opacity: 0.8
-        }}>
-          <p style={{ margin: '0 0 0.5rem 0' }}>
-            💡 使用说明：
-          </p>
-          <ul style={{
-            margin: 0,
-            'padding-left': '1.5rem'
-          }}>
-            <For each={getCurrentPlatform()?.tips || []}>
+        <Show when={showAdvanced()}>
+          <div class="advanced-panel" style={{ padding: '1rem', border: '1px dashed var(--border)', background: 'var(--surface-soft)', 'border-radius': 'var(--radius-sm)' }}>
+            <div class="field-label">自定义剧集标题</div>
+            <input
+              type="text"
+              class="input"
+              placeholder="可选，例如：第 12 期 B 站访谈"
+              value={episodeTitle()}
+              onInput={(e) => setEpisodeTitle(e.target.value)}
+            />
+          </div>
+        </Show>
+
+        {/* 操作按钮 */}
+        <div style={{ display: 'flex', gap: '0.75rem', 'padding-top': '0.5rem' }}>
+          <button
+            type="submit"
+            class="btn btn-primary"
+            disabled={!canSubmit()}
+            style={{ flex: 1 }}
+          >
+            开始下载
+          </button>
+        </div>
+
+        <div class="divider"></div>
+
+        {/* 提示信息 */}
+        <div style={{ background: 'var(--accent-soft)', padding: '1rem', 'border-radius': 'var(--radius-sm)' }}>
+          <ul class="tips-list" style={{ margin: 0, 'padding-left': '1.2rem' }}>
+            <For each={getCurrentPlatform().tips}>
               {(tip) => <li>{tip}</li>}
             </For>
           </ul>
         </div>
-      </Show>
-    </div>
+      </form>
+    </section>
   );
 }
