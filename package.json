@@ -48,11 +48,13 @@
     "fs-extra": "^11.2.0",
     "path": "^0.12.7",
     "pinyin": "^3.0.0-alpha.5",
-    "podcast": "^2.0.1"
+    "podcast": "^2.0.1",
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",
     "@types/node": "^20.11.5",
+    "@types/uuid": "^10.0.0",
     "concurrently": "^9.2.1",
     "cross-env": "^7.0.3",
     "rimraf": "^5.0.5",

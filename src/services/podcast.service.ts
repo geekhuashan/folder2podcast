@@ -77,23 +77,29 @@ export class PodcastService {
     }
 
     /**
-     * 扫描音频文件
+     * 扫描音频文件（仅扫描根目录）
      * @param dirPath 目录路径
      * @param config 播客配置
      * @returns 剧集数组
      */
     private async scanAudioFiles(dirPath: string, config: PodcastConfigV2Full): Promise<Episode[]> {
-        const files = await fs.readdir(dirPath);
         const episodes: Episode[] = [];
 
-        for (const file of files) {
-            // 跳过隐藏文件
-            if (file.startsWith('.')) {
+        const entries = await fs.readdir(dirPath, { withFileTypes: true });
+
+        for (const entry of entries) {
+            // 跳过隐藏文件和目录
+            if (entry.name.startsWith('.')) {
+                continue;
+            }
+
+            // 只处理文件，忽略子目录
+            if (!entry.isFile()) {
                 continue;
             }
 
             // 验证文件名
-            if (!validateFileName(file)) {
+            if (!validateFileName(entry.name)) {
                 continue;
             }
 
@@ -104,10 +110,12 @@ export class PodcastService {
                     useMTime: config.useMTime
                 };
 
-                const episode = createEpisode(file, dirPath, episodeConfig);
+                // 创建剧集对象
+                const episode = createEpisode(entry.name, dirPath, episodeConfig);
+
                 episodes.push(episode);
             } catch (error) {
-                console.warn(`Skipping invalid file: ${file}`, error);
+                console.warn(`Skipping invalid file: ${entry.name}`, error);
             }
         }
 

@@ -42,7 +42,7 @@ export class FileManagementService {
     }
 
     /**
-     * 列出播客目录下的所有文件
+     * 列出播客目录下的所有文件（仅扫描根目录）
      */
     async listFiles(podcastDir: string): Promise<{
         audio: string[];
@@ -55,26 +55,32 @@ export class FileManagementService {
             throw new Error(`Podcast directory not found: ${podcastDir}`);
         }
 
-        const files = await fs.readdir(dirPath);
         const result = {
             audio: [] as string[],
             images: [] as string[],
             others: [] as string[]
         };
 
-        for (const file of files) {
-            const filePath = path.join(dirPath, file);
-            const stat = await fs.stat(filePath);
+        const entries = await fs.readdir(dirPath, { withFileTypes: true });
 
-            if (!stat.isFile()) continue;
+        for (const entry of entries) {
+            // 跳过隐藏文件和目录
+            if (entry.name.startsWith('.')) {
+                continue;
+            }
 
-            const { valid, type } = this.isValidFileType(file);
+            // 只处理文件，忽略子目录
+            if (!entry.isFile()) {
+                continue;
+            }
+
+            const { valid, type } = this.isValidFileType(entry.name);
             if (type === 'audio') {
-                result.audio.push(file);
+                result.audio.push(entry.name);
             } else if (type === 'image') {
-                result.images.push(file);
+                result.images.push(entry.name);
             } else {
-                result.others.push(file);
+                result.others.push(entry.name);
             }
         }
 
