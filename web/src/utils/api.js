@@ -12,12 +12,15 @@ const addApiKey = (url) => {
 // 通用请求函数
 async function request(url, options = {}) {
   try {
+    // 只在有 body 的情况下设置 Content-Type
+    const headers = { ...options.headers };
+    if (options.body) {
+      headers['Content-Type'] = 'application/json';
+    }
+
     const response = await fetch(addApiKey(url), {
       ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
+      headers,
     });
 
     if (!response.ok) {

@@ -105,36 +105,21 @@ export class PodcastServer {
     private async displayStartupInfo(): Promise<void> {
         try {
             const podcasts = await this.podcastService.scanAllPodcasts();
+            const config = getEnvConfig();
+            const isDev = process.env.NODE_ENV === 'development';
 
-            if (podcasts.length === 0) {
-                console.log('\n未发现任何播客源!请确保音频文件夹结构正确。');
-                return;
+            console.log(`\n✓ 已发现 ${podcasts.length} 个播客源`);
+            console.log(`✓ 服务器地址: ${this.baseUrl}`);
+
+            if (!isDev) {
+                // 生产环境：前端由后端服务器提供
+                console.log(`✓ Web 界面: ${this.baseUrl}/web/index.html`);
+            } else {
+                // 开发环境：前端由 Vite 开发服务器提供
+                const vitePort = process.env.VITE_PORT || '3200';
+                console.log(`✓ Web 界面: http://${config.HOST}:${vitePort}/web/ (Vite 开发服务器)`);
             }
-
-            console.log('\n发现以下播客源:');
-            console.log('='.repeat(50));
-
-            for (const podcast of podcasts) {
-                const episodeCount = podcast.episodes.length;
-                const coverInfo = podcast.coverPath ? '✓' : '✗';
-
-                console.log(`
-  ${podcast.config.title}
-  ├── 描述: ${podcast.config.description}
-  ├── 作者: ${podcast.config.author}
-  ├── 语言: ${podcast.config.language}
-  ├── 封面: ${coverInfo}
-  ├── 剧集数: ${episodeCount}
-  ├── 文件夹名: ${podcast.dirName}
-  └── RSS地址: ${this.baseUrl}/feeds/${encodeURIComponent(podcast.dirName)}.xml`);
-                console.log('='.repeat(50));
-            }
-
-            console.log(`\n总共发现 ${podcasts.length} 个播客源`);
-            console.log(`服务器地址: ${this.baseUrl}`);
-            console.log('API端点:');
-            console.log('  - V2 API: /api/v2/podcasts');
-            console.log('  - V1 兼容: /podcasts\n');
+            console.log('');
         } catch (error) {
             this.server.log.error('Error displaying startup info:', error);
         }

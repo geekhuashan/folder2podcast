@@ -32,8 +32,10 @@ export interface EnvConfig {
     PORT: number;
     // 全局标题显示策略：clean=清理后的标题，full=完整文件名
     TITLE_FORMAT: 'clean' | 'full';
-    // 服务器基础URL，用于生成RSS feed中的链接
+    // 服务器基础URL，用于生成RSS feed中的链接（不配置时自动生成）
     BASE_URL: string;
+    // 主机名/IP地址（用于生成BASE_URL，默认localhost）
+    HOST: string;
     // 管理 API 密钥（可选）
     API_KEY?: string;
 }
@@ -45,10 +47,13 @@ export interface EnvConfig {
 export function getEnvConfig(): EnvConfig {
     const defaultAudioDir = path.join(process.cwd(), 'audio');
     const defaultPort = 3100;
+    const defaultHost = 'localhost';
 
     const port = parseInt(process.env.PORT || String(defaultPort), 10);
-    // 构建默认的基础URL
-    const defaultBaseUrl = `http://localhost:${port}`;
+    const host = process.env.HOST || defaultHost;
+
+    // BASE_URL 优先使用环境变量，否则根据 HOST 和 PORT 自动生成
+    const baseUrl = process.env.BASE_URL || `http://${host}:${port}`;
 
     return {
         // 音频文件夹路径，默认为当前目录下的 audio 文件夹
@@ -57,8 +62,10 @@ export function getEnvConfig(): EnvConfig {
         PORT: port,
         // 标题显示策略，默认为full（完整文件名，不含扩展名）
         TITLE_FORMAT: (process.env.TITLE_FORMAT as 'clean' | 'full') || 'full',
-        // 服务器基础URL，默认为 http://localhost:端口号
-        BASE_URL: process.env.BASE_URL || defaultBaseUrl,
+        // 主机名/IP地址
+        HOST: host,
+        // 服务器基础URL
+        BASE_URL: baseUrl,
         // API 密钥（可选）
         API_KEY: process.env.API_KEY
     };

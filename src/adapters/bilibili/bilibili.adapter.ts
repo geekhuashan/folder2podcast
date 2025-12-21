@@ -230,14 +230,15 @@ export class BilibiliAdapter extends BaseDownloadAdapter {
             process.stdout?.on('data', (data) => {
                 const chunk = data.toString();
                 stdout += chunk;
-                // 实时输出进度信息
-                if (chunk.includes('%') || chunk.includes('下载')) {
-                    this.log(chunk.trim(), 'info');
-                }
+                // 输出所有 stdout 内容到控制台
+                this.log(chunk.trim(), 'info');
             });
 
             process.stderr?.on('data', (data) => {
-                stderr += data.toString();
+                const chunk = data.toString();
+                stderr += chunk;
+                // 输出所有 stderr 内容到控制台（通常是警告信息）
+                this.log(chunk.trim(), 'warn');
             });
 
             process.on('error', (error) => {

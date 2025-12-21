@@ -94,6 +94,42 @@ export async function registerManagementRoutes(
     });
 
     /**
+     * GET /api/v2/manage/podcasts/:podcastDir
+     * 获取播客详细信息（包含配置和文件列表）
+     */
+    server.get('/api/v2/manage/podcasts/:podcastDir', {
+        preHandler: apiKeyAuth
+    }, async (request, reply) => {
+        const { podcastDir } = request.params as { podcastDir: string };
+
+        try {
+            // 获取配置
+            const config = await configService.getConfig(podcastDir);
+
+            // 获取文件列表
+            const files = await fileService.listFiles(podcastDir);
+
+            reply.send({
+                data: {
+                    dirName: podcastDir,
+                    config,
+                    files
+                },
+                metadata: {
+                    totalAudio: files.audio.length,
+                    totalImages: files.images.length,
+                    totalOthers: files.others.length
+                }
+            });
+        } catch (error) {
+            reply.code(500).send({
+                error: 'Failed to get podcast',
+                message: error instanceof Error ? error.message : 'Unknown error'
+            });
+        }
+    });
+
+    /**
      * DELETE /api/v2/manage/podcasts/:podcastDir
      * 删除整个播客及其所有文件
      */
