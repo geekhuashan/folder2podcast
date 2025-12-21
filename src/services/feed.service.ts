@@ -124,9 +124,15 @@ export class FeedService {
             const episodeUrl = `${baseUrl}/audio/${encodeURIComponent(source.dirName)}/${encodeURIComponent(episode.fileName)}`;
             const fileSize = await this.getFileSize(episode.filePath);
 
+            // 使用剧集封面或播客封面
+            const episodeImage = episode.imageUrl || feedImage;
+
+            // 使用剧集描述或标题
+            const episodeDescription = episode.description || episode.title;
+
             feed.addItem({
                 title: episode.title,
-                description: episode.title,
+                description: episodeDescription,
                 url: episodeUrl,
                 guid: episodeUrl,
                 date: episode.pubDate,
@@ -137,10 +143,11 @@ export class FeedService {
                 },
                 itunesAuthor: config.author,
                 itunesSubtitle: episode.title,
-                itunesSummary: episode.title,
+                itunesSummary: episodeDescription,
                 itunesExplicit: config.explicit,
                 itunesEpisodeType: 'full',
-                itunesDuration: 0
+                itunesDuration: 0,
+                itunesImage: episodeImage
             });
         }
 

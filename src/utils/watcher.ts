@@ -41,7 +41,14 @@ function extractPodcastDirName(filePath: string, audioDir: string): string | und
 export function watchFolderChanges(server: PodcastServer): void {
     // 创建一个防抖的缓存清除函数
     const debouncedClearCache = debounce((filePath: string) => {
-        console.log('检测到文件变化，清除相关缓存...');
+        const fileName = path.basename(filePath);
+        const isConfigFile = fileName === 'podcast.json' || fileName === 'episodes.json';
+
+        if (isConfigFile) {
+            console.log(`检测到配置文件变化: ${fileName}，清除相关缓存...`);
+        } else {
+            console.log('检测到文件变化，清除相关缓存...');
+        }
 
         // 提取播客目录名
         const dirName = extractPodcastDirName(filePath, server.audioDirectory);

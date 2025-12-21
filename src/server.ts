@@ -11,6 +11,7 @@ import { registerApiRoutes } from './routes/api.routes';
 import { registerFeedRoutes } from './routes/feed.routes';
 import { registerManagementRoutes } from './routes/management.routes';
 import { registerBilibiliRoutes } from './routes/bilibili.routes';
+import { registerEpisodeRoutes } from './routes/episode.routes';
 import { BilibiliDownloadService } from './services/bilibili-download.service';
 
 // 设置默认封面路径为assets中的图片
@@ -80,8 +81,11 @@ export class PodcastServer {
             // 注册 Feed 路由
             await registerFeedRoutes(this.server, this.podcastService, this.feedService);
 
-            // 注册管理 API 路由(需要认证)
+            // 注册管理 API 路由(需要认证，并会注册 multipart)
             await registerManagementRoutes(this.server, this.podcastService, this.feedService);
+
+            // 注册剧集管理路由
+            await registerEpisodeRoutes(this.server, this.podcastService);
 
             // 注册 B 站下载路由
             await registerBilibiliRoutes(this.server, this.bilibiliService, this.feedService);

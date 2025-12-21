@@ -189,6 +189,66 @@ export const podcastsAPI = {
   },
 };
 
+// 剧集元数据管理 API
+export const episodesAPI = {
+  // 获取播客的剧集列表
+  async getEpisodes(podcastDir) {
+    return request(`${API_BASE}/podcasts/${encodeURIComponent(podcastDir)}/episodes`);
+  },
+
+  // 更新剧集元数据
+  async updateMetadata(podcastDir, fileName, metadata) {
+    return request(
+      `${API_BASE}/podcasts/${encodeURIComponent(podcastDir)}/episodes/metadata`,
+      {
+        method: 'PUT',
+        body: JSON.stringify({ fileName, metadata }),
+      }
+    );
+  },
+
+  // 删除剧集元数据
+  async deleteMetadata(podcastDir, fileName) {
+    return request(
+      `${API_BASE}/podcasts/${encodeURIComponent(podcastDir)}/episodes/${encodeURIComponent(fileName)}/metadata`,
+      {
+        method: 'DELETE',
+      }
+    );
+  },
+
+  // 上传剧集封面
+  async uploadCover(podcastDir, fileName, file) {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch(
+      addApiKey(`${API_BASE}/podcasts/${encodeURIComponent(podcastDir)}/episodes/${encodeURIComponent(fileName)}/cover`),
+      {
+        method: 'POST',
+        body: formData,
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Upload failed');
+    }
+
+    return await response.json();
+  },
+
+  // 删除剧集封面
+  async deleteCover(podcastDir, fileName) {
+    return request(
+      `${API_BASE}/podcasts/${encodeURIComponent(podcastDir)}/episodes/${encodeURIComponent(fileName)}/cover`,
+      {
+        method: 'DELETE',
+      }
+    );
+  },
+};
+
 // B 站下载 API
 export const bilibiliAPI = {
   /**

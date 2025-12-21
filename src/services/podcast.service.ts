@@ -1,6 +1,6 @@
 import fs from 'fs-extra';
 import path from 'path';
-import { Episode, PodcastSourceV2, PodcastConfigV2Full } from '../types';
+import { Episode, PodcastSourceV2, PodcastConfigV2Full, EpisodesConfig, EpisodeMetadata } from '../types';
 import { ConfigService } from './config.service';
 import { createEpisode, validateFileName, parseEpisodeNumber } from '../utils/episode';
 import { getEnvConfig } from '../utils/env';
@@ -29,8 +29,18 @@ export class PodcastService {
         // 扫描音频文件
         const episodes = await this.scanAudioFiles(dirPath, config);
 
+        // 读取剧集元数据配置（如果存在）
+        const episodesConfig = await this.readEpisodesConfig(dirPath);
+
+        // 应用剧集元数据
+        const episodesWithMetadata = await this.applyEpisodesMetadata(
+            episodes,
+            episodesConfig,
+            dirPath
+        );
+
         // 排序剧集
-        const sortedEpisodes = this.sortEpisodes(episodes, config);
+        const sortedEpisodes = this.sortEpisodes(episodesWithMetadata, config);
 
         // 查找封面
         const coverPath = await this.findCover(dirPath);
@@ -180,5 +190,90 @@ export class PodcastService {
         }
 
         return undefined;
+    }
+
+    /**
+     * 读取剧集元数据配置文件
+     * @param dirPath 播客目录路径
+     * @returns 剧集配置对象，如果文件不存在则返回 null
+     */
+    private async readEpisodesConfig(dirPath: string): Promise<EpisodesConfig | null> {
+        const configPath = path.join(dirPath, 'episodes.json');
+
+        try {
+            // 检查文件是否存在
+            if (!await fs.pathExists(configPath)) {
+                return null;
+            }
+
+            // 读取并解析配置文件
+            const content = await fs.readFile(configPath, 'utf-8');
+            const config = JSON.parse(content) as EpisodesConfig;
+
+            return config;
+        } catch (error) {
+            console.warn(`Failed to read episodes.json in ${dirPath}:`, error);
+            return null;
+        }
+    }
+
+    /**
+     * 应用剧集元数据到剧集数组
+     * @param episodes 原始剧集数组
+     * @param episodesConfig 剧集元数据配置
+     * @param dirPath 播客目录路径
+     * @returns 应用元数据后的剧集数组
+     */
+    private async applyEpisodesMetadata(
+        episodes: Episode[],
+        episodesConfig: EpisodesConfig | null,
+        dirPath: string
+    ): Promise<Episode[]> {
+        // 如果没有配置，直接返回原始剧集
+        if (!episodesConfig || !episodesConfig.episodes) {
+            return episodes;
+        }
+
+        const { BASE_URL } = getEnvConfig();
+        const dirName = path.basename(dirPath);
+
+        // 为每个剧集应用元数据
+        return episodes.map(episode => {
+            const metadata = episodesConfig.episodes[episode.fileName];
+
+            // 如果没有该剧集的元数据，返回原始剧集
+            if (!metadata) {
+                return episode;
+            }
+
+            // 应用元数据（优先使用配置的值）
+            const updatedEpisode: Episode = { ...episode };
+
+            // 应用自定义标题
+            if (metadata.title) {
+                updatedEpisode.title = metadata.title;
+            }
+
+            // 应用描述
+            if (metadata.description) {
+                updatedEpisode.description = metadata.description;
+            }
+
+            // 应用自定义发布时间
+            if (metadata.pubDate) {
+                try {
+                    updatedEpisode.pubDate = new Date(metadata.pubDate);
+                } catch (error) {
+                    console.warn(`Invalid pubDate for ${episode.fileName}:`, metadata.pubDate);
+                }
+            }
+
+            // 应用剧集封面
+            if (metadata.image) {
+                updatedEpisode.imageUrl = `${BASE_URL}/audio/${encodeURIComponent(dirName)}/${encodeURIComponent(metadata.image)}`;
+            }
+
+            return updatedEpisode;
+        });
     }
 }

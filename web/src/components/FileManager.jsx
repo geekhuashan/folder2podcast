@@ -1,8 +1,9 @@
 import { createSignal, createResource, For, Show, createMemo } from 'solid-js';
-import { podcastsAPI } from '../utils/api';
+import { podcastsAPI, episodesAPI } from '../utils/api';
 import ConfigEditor from './ConfigEditor';
 import AudioPlayer from './AudioPlayer';
 import UploadProgressWindow from './UploadProgressWindow';
+import EpisodeEditor from './EpisodeEditor';
 import { useToast } from './Toast';
 import {
   addUploadTask,
@@ -33,11 +34,14 @@ const copyToClipboard = async (text) => {
 export default function FileManager(props) {
   const toast = useToast();
   const [files, { refetch }] = createResource(() => props.podcast.dirName, podcastsAPI.getFiles);
+  const [episodes, { refetch: refetchEpisodes }] = createResource(() => props.podcast.dirName, episodesAPI.getEpisodes);
   const [showConfigEditor, setShowConfigEditor] = createSignal(false);
   const [playingAudio, setPlayingAudio] = createSignal(null);
   const [renaming, setRenaming] = createSignal(null);
   const [newFileName, setNewFileName] = createSignal('');
   const [rssCopied, setRssCopied] = createSignal(false);
+  const [editingEpisode, setEditingEpisode] = createSignal(null);
+  const [showEpisodeEditor, setShowEpisodeEditor] = createSignal(false);
 
   // 创建响应式的上传状态统计
   const uploadStats = createMemo(() => uploadState.summary);
@@ -145,6 +149,34 @@ export default function FileManager(props) {
     }
   };
 
+  // 编辑剧集元数据
+  const handleEditEpisode = (fileName) => {
+    // 从 episodes 数据中查找对应的剧集
+    const episodeData = episodes()?.data?.find(ep => ep.fileName === fileName);
+
+    if (!episodeData) {
+      // 如果没有找到，创建一个默认的剧集对象
+      setEditingEpisode({
+        fileName: fileName,
+        title: fileName,
+        description: '',
+        pubDate: new Date().toISOString(),
+        imageUrl: '',
+        metadata: null
+      });
+    } else {
+      setEditingEpisode(episodeData);
+    }
+
+    setShowEpisodeEditor(true);
+  };
+
+  // 剧集编辑成功回调
+  const handleEpisodeEditSuccess = () => {
+    refetchEpisodes();
+    refetch();
+  };
+
   // 播放音频
   const handlePlay = (fileName) => {
     const audioUrl = `/audio/${encodeURIComponent(props.podcast.dirName)}/${encodeURIComponent(fileName)}`;
@@ -240,8 +272,11 @@ export default function FileManager(props) {
                             <button class="btn btn-sm btn-soft" onClick={() => handlePlay(fileName)}>
                               ▶️ 试听
                             </button>
+                            <button class="btn btn-sm btn-soft" onClick={() => handleEditEpisode(fileName)}>
+                              ✏️ 编辑元数据
+                            </button>
                             <button class="btn btn-sm btn-soft" onClick={() => startRename(fileName)}>
-                              ✏️ 重命名
+                              📝 重命名
                             </button>
                             <button class="btn btn-sm btn-danger" onClick={() => handleDelete(fileName)}>
                               🗑️ 删除
@@ -301,6 +336,15 @@ export default function FileManager(props) {
           onClose={() => setPlayingAudio(null)}
         />
       </Show>
+
+      {/* 剧集元数据编辑器 */}
+      <EpisodeEditor
+        show={showEpisodeEditor()}
+        episode={editingEpisode()}
+        podcastDir={props.podcast.dirName}
+        onClose={() => setShowEpisodeEditor(false)}
+        onSuccess={handleEpisodeEditSuccess}
+      />
 
       {/* 上传进度浮动窗口 */}
       <UploadProgressWindow />

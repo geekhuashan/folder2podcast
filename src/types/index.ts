@@ -4,6 +4,8 @@ export interface Episode {
     fileName: string;
     filePath: string;
     pubDate: Date;
+    description?: string;     // 剧集描述（可选）
+    imageUrl?: string;        // 剧集封面 URL（可选）
 }
 
 export type EpisodeNumberStrategy =
@@ -116,4 +118,21 @@ export interface BilibiliDownloadResult {
     podcastName: string;            // 所属播客名称
     episodeTitle: string;           // 剧集标题
     videoInfo: BilibiliVideoInfo;   // 视频信息
+}
+
+/**
+ * 单个剧集的元数据配置
+ */
+export interface EpisodeMetadata {
+    title?: string;           // 自定义标题，覆盖从文件名提取的标题
+    description?: string;     // 剧集描述/简介
+    image?: string;           // 剧集封面图片（相对于播客目录的路径）
+    pubDate?: string;         // 发布时间（ISO 8601 格式）
+}
+
+/**
+ * episodes.json 配置文件结构
+ */
+export interface EpisodesConfig {
+    episodes: Record<string, EpisodeMetadata>;  // key 是音频文件名
 }
