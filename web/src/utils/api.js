@@ -203,4 +203,13 @@ export const bilibiliAPI = {
       body: JSON.stringify(params),
     });
   },
+
+  /**
+   * 获取下载任务进度
+   * @param {string} taskId - 任务 ID
+   * @returns {Promise} 任务进度
+   */
+  async getTaskProgress(taskId) {
+    return request(`/api/bilibili/tasks/${taskId}`);
+  },
 };

@@ -289,16 +289,16 @@ export default function FloatingTaskWindow() {
                         </div>
 
                         {/* 进度条 */}
-                        <Show when={isActive(task) && task.progress !== undefined}>
+                        <Show when={isActive(task) && (task.progress !== undefined || task.percent !== undefined)}>
                           <div class="floating-task-item__progress">
                             <div class="floating-task-item__progress-bar">
                               <div
                                 class="floating-task-item__progress-fill"
-                                style={{ width: `${task.progress || 0}%` }}
+                                style={{ width: `${task.progress || task.percent || 0}%` }}
                               />
                             </div>
                             <div class="floating-task-item__progress-text">
-                              {Math.round(task.progress || 0)}%
+                              {Math.round(task.progress || task.percent || 0)}%
                             </div>
                           </div>
                         </Show>
@@ -318,7 +318,7 @@ export default function FloatingTaskWindow() {
                         {/* 完成信息 */}
                         <Show when={isCompleted(task)}>
                           <div class="floating-task-item__success">
-                            ✓ {task.type === 'upload' ? '上传成功' : (task.result?.fileName || '下载成功')}
+                            ✓ {task.type === 'upload' ? '上传成功' : (task.fileName || task.result?.fileName || '下载成功')}
                           </div>
                         </Show>
                       </div>

@@ -1622,3 +1622,29 @@ select:focus {
   max-width: 480px;
 }
 
+/* ========================================
+   高亮动画 - 用于标记新下载的播客
+   ======================================== */
+
+/**
+ * 脉冲动画：通过缩放和阴影变化吸引注意力
+ * - 动画持续 0.8 秒
+ * - 循环 3 次
+ * - 使用主题色的阴影
+ */
+@keyframes highlight-pulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+  50% {
+    transform: scale(1.02);
+    box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.2),
+                0 8px 20px rgba(16, 185, 129, 0.15);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+}
+

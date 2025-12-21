@@ -1,5 +1,4 @@
 import { createStore } from 'solid-js/store';
-import { createSignal } from 'solid-js';
 import { bilibiliAPI } from './api';
 
 /**
@@ -13,13 +12,14 @@ export const TaskStatus = {
 };
 
 /**
- * 下载任务管理器
+ * 下载任务管理器（重构版 - 使用异步 API）
  *
  * 功能：
- * - 管理下载任务队列
- * - 依次执行任务（不并发，避免服务器压力）
- * - 提供任务状态查询
- * - 支持任务历史记录
+ * - 管理下载任务列表
+ * - 使用新的异步 API（立即返回 taskId）
+ * - 通过轮询更新任务进度
+ * - 支持多任务并发下载
+ * - 提供任务历史记录
  */
 class DownloadTaskManager {
   constructor() {
@@ -28,32 +28,38 @@ class DownloadTaskManager {
     this.tasks = tasks;
     this.setTasks = setTasks;
 
-    // 当前是否正在执行任务
-    const [isProcessing, setIsProcessing] = createSignal(false);
-    this.isProcessing = isProcessing;
-    this.setIsProcessing = setIsProcessing;
+    // 任务 ID 计数器（用于本地标识）
+    this.localTaskIdCounter = 1;
 
-    // 任务 ID 计数器
-    this.taskIdCounter = 1;
+    // 轮询定时器映射：localTaskId -> intervalId
+    this.pollingIntervals = new Map();
   }
 
   /**
-   * 添加下载任务到队列
+   * 添加下载任务
    * @param {Object} taskData - 任务数据
-   * @returns {number} 任务 ID
+   * @returns {Promise<number>} 本地任务 ID
    */
-  addTask(taskData) {
-    const taskId = this.taskIdCounter++;
+  async addTask(taskData) {
+    const localTaskId = this.localTaskIdCounter++;
 
+    // 创建初始任务对象
     const newTask = {
-      id: taskId,
+      id: localTaskId,
+      serverTaskId: null, // 服务器端的 taskId
       url: taskData.url,
       podcastName: taskData.podcastName,
       episodeTitle: taskData.episodeTitle,
       autoCreatePodcast: taskData.autoCreatePodcast,
+      selectPage: taskData.selectPage,
       status: TaskStatus.PENDING,
-      progress: 0,
-      result: null,
+      percent: 0,
+      speed: '0 KB/s',
+      eta: '计算中...',
+      current: 0,
+      total: 1,
+      fileName: null,
+      filePaths: null,
       error: null,
       createdAt: new Date(),
       startedAt: null,
@@ -63,84 +69,137 @@ class DownloadTaskManager {
     // 添加到任务列表
     this.setTasks((tasks) => [...tasks, newTask]);
 
-    // 如果当前没有正在执行的任务，立即开始处理
-    if (!this.isProcessing()) {
-      this.processQueue();
+    try {
+      // 调用新的异步下载 API
+      const result = await bilibiliAPI.download({
+        url: taskData.url,
+        podcastName: taskData.podcastName,
+        episodeTitle: taskData.episodeTitle,
+        autoCreatePodcast: taskData.autoCreatePodcast,
+        selectPage: taskData.selectPage
+      });
+
+      if (!result.success) {
+        throw new Error(result.error || '创建下载任务失败');
+      }
+
+      // 获取服务器端的 taskId
+      const serverTaskId = result.data.taskId;
+
+      // 更新任务，保存 serverTaskId
+      const taskIndex = this.tasks.findIndex(t => t.id === localTaskId);
+      if (taskIndex !== -1) {
+        this.setTasks(taskIndex, {
+          serverTaskId,
+          status: TaskStatus.DOWNLOADING,
+          startedAt: new Date()
+        });
+
+        // 开始轮询任务进度
+        this.startPolling(localTaskId, serverTaskId);
+      }
+
+    } catch (error) {
+      // 创建任务失败
+      console.error('Failed to create download task:', error);
+      const taskIndex = this.tasks.findIndex(t => t.id === localTaskId);
+      if (taskIndex !== -1) {
+        this.setTasks(taskIndex, {
+          status: TaskStatus.FAILED,
+          error: error.message || '创建任务失败',
+          completedAt: new Date()
+        });
+      }
     }
 
-    return taskId;
+    return localTaskId;
   }
 
   /**
-   * 处理任务队列（依次执行）
+   * 开始轮询任务进度
+   * @param {number} localTaskId - 本地任务 ID
+   * @param {string} serverTaskId - 服务器任务 ID
    */
-  async processQueue() {
-    if (this.isProcessing()) {
-      return; // 已经在处理中
+  startPolling(localTaskId, serverTaskId) {
+    // 立即查询一次
+    this.pollTaskProgress(localTaskId, serverTaskId);
+
+    // 每秒轮询一次
+    const intervalId = setInterval(() => {
+      this.pollTaskProgress(localTaskId, serverTaskId);
+    }, 1000);
+
+    this.pollingIntervals.set(localTaskId, intervalId);
+  }
+
+  /**
+   * 停止轮询
+   * @param {number} localTaskId - 本地任务 ID
+   */
+  stopPolling(localTaskId) {
+    const intervalId = this.pollingIntervals.get(localTaskId);
+    if (intervalId) {
+      clearInterval(intervalId);
+      this.pollingIntervals.delete(localTaskId);
     }
+  }
 
-    // 查找第一个待处理的任务
-    const pendingTaskIndex = this.tasks.findIndex(
-      (task) => task.status === TaskStatus.PENDING
-    );
-
-    if (pendingTaskIndex === -1) {
-      // 没有待处理的任务了
-      this.setIsProcessing(false);
-      return;
-    }
-
-    this.setIsProcessing(true);
-    const task = this.tasks[pendingTaskIndex];
-
+  /**
+   * 轮询任务进度
+   * @param {number} localTaskId - 本地任务 ID
+   * @param {string} serverTaskId - 服务器任务 ID
+   */
+  async pollTaskProgress(localTaskId, serverTaskId) {
     try {
-      // 更新任务状态为下载中
-      this.setTasks(pendingTaskIndex, (task) => ({
-        ...task,
-        status: TaskStatus.DOWNLOADING,
-        startedAt: new Date()
-      }));
+      const result = await bilibiliAPI.getTaskProgress(serverTaskId);
 
-      // 调用下载 API
-      const result = await bilibiliAPI.download({
-        url: task.url,
-        podcastName: task.podcastName,
-        episodeTitle: task.episodeTitle,
-        autoCreatePodcast: task.autoCreatePodcast
+      if (!result.success) {
+        // 任务查询失败，停止轮询
+        this.stopPolling(localTaskId);
+        const taskIndex = this.tasks.findIndex(t => t.id === localTaskId);
+        if (taskIndex !== -1) {
+          this.setTasks(taskIndex, {
+            status: TaskStatus.FAILED,
+            error: result.error || '任务查询失败',
+            completedAt: new Date()
+          });
+        }
+        return;
+      }
+
+      const progress = result.data;
+      const taskIndex = this.tasks.findIndex(t => t.id === localTaskId);
+      if (taskIndex === -1) {
+        // 任务不存在，停止轮询
+        this.stopPolling(localTaskId);
+        return;
+      }
+
+      // 更新任务进度
+      this.setTasks(taskIndex, {
+        status: progress.status,
+        percent: progress.percent,
+        speed: progress.speed,
+        eta: progress.eta,
+        current: progress.current,
+        total: progress.total,
+        fileName: progress.fileName,
+        filePaths: progress.filePaths,
+        error: progress.error
       });
 
-      // 下载成功
-      if (result.success) {
-        this.setTasks(pendingTaskIndex, (task) => ({
-          ...task,
-          status: TaskStatus.COMPLETED,
-          progress: 100,
-          result: result.data,
+      // 如果任务已完成或失败，停止轮询
+      if (progress.status === 'completed' || progress.status === 'failed') {
+        this.stopPolling(localTaskId);
+        this.setTasks(taskIndex, {
           completedAt: new Date()
-        }));
-      } else {
-        // 下载失败
-        this.setTasks(pendingTaskIndex, (task) => ({
-          ...task,
-          status: TaskStatus.FAILED,
-          error: result.error || '下载失败',
-          completedAt: new Date()
-        }));
+        });
       }
-    } catch (error) {
-      // 异常处理
-      console.error('Task execution error:', error);
-      this.setTasks(pendingTaskIndex, (task) => ({
-        ...task,
-        status: TaskStatus.FAILED,
-        error: error.message || '网络错误',
-        completedAt: new Date()
-      }));
-    }
 
-    // 继续处理下一个任务
-    this.setIsProcessing(false);
-    this.processQueue();
+    } catch (error) {
+      console.error('Failed to poll task progress:', error);
+      // 网络错误时不停止轮询，继续尝试
+    }
   }
 
   /**
@@ -177,6 +236,13 @@ class DownloadTaskManager {
    * 清除已完成的任务
    */
   clearCompletedTasks() {
+    // 停止已完成任务的轮询（如果有）
+    this.tasks.forEach(task => {
+      if (task.status === TaskStatus.COMPLETED) {
+        this.stopPolling(task.id);
+      }
+    });
+
     this.setTasks((tasks) =>
       tasks.filter((task) => task.status !== TaskStatus.COMPLETED)
     );
@@ -186,6 +252,11 @@ class DownloadTaskManager {
    * 清除所有任务
    */
   clearAllTasks() {
+    // 停止所有轮询
+    this.tasks.forEach(task => {
+      this.stopPolling(task.id);
+    });
+
     this.setTasks([]);
   }
 
@@ -193,26 +264,35 @@ class DownloadTaskManager {
    * 重试失败的任务
    * @param {number} taskId - 任务 ID
    */
-  retryTask(taskId) {
+  async retryTask(taskId) {
     const taskIndex = this.tasks.findIndex((task) => task.id === taskId);
     if (taskIndex === -1) return;
 
     const task = this.tasks[taskIndex];
     if (task.status !== TaskStatus.FAILED) return;
 
-    // 重置任务状态
-    this.setTasks(taskIndex, (task) => ({
-      ...task,
-      status: TaskStatus.PENDING,
-      error: null,
-      result: null,
-      completedAt: null
-    }));
+    // 创建新任务（复用原任务数据）
+    await this.addTask({
+      url: task.url,
+      podcastName: task.podcastName,
+      episodeTitle: task.episodeTitle,
+      autoCreatePodcast: task.autoCreatePodcast,
+      selectPage: task.selectPage
+    });
 
-    // 重新处理队列
-    if (!this.isProcessing()) {
-      this.processQueue();
-    }
+    // 删除失败的旧任务
+    this.setTasks((tasks) => tasks.filter((t) => t.id !== taskId));
+  }
+
+  /**
+   * 清理资源（用于组件卸载时）
+   */
+  cleanup() {
+    // 停止所有轮询
+    this.pollingIntervals.forEach((intervalId) => {
+      clearInterval(intervalId);
+    });
+    this.pollingIntervals.clear();
   }
 }
 

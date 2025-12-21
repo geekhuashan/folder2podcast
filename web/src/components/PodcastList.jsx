@@ -1,4 +1,4 @@
-import { createSignal, createResource, For, Show } from 'solid-js';
+import { createSignal, createResource, For, Show, createEffect } from 'solid-js';
 import { podcastsAPI } from '../utils/api';
 import CreatePodcastModal from './CreatePodcastModal';
 import { useToast } from './Toast';
@@ -29,6 +29,24 @@ export default function PodcastList(props) {
   const [copiedPodcast, setCopiedPodcast] = createSignal(null);
   const [podcastToDelete, setPodcastToDelete] = createSignal(null);
   const [isDeleting, setIsDeleting] = createSignal(false);
+
+  // 高亮动画状态：记录需要高亮显示的播客
+  const [highlightedPodcast, setHighlightedPodcast] = createSignal(null);
+
+  /**
+   * 暴露 refetch 方法给父组件，并接收需要高亮的播客名称
+   */
+  createEffect(() => {
+    if (props.refetchTrigger) {
+      refetch();
+      // 如果传入了需要高亮的播客名称
+      if (props.highlightPodcast) {
+        setHighlightedPodcast(props.highlightPodcast);
+        // 3秒后移除高亮
+        setTimeout(() => setHighlightedPodcast(null), 3000);
+      }
+    }
+  });
 
   const handleCreateSuccess = () => {
     setShowCreateModal(false);
@@ -114,54 +132,67 @@ export default function PodcastList(props) {
           >
             <div class="card-grid">
               <For each={podcasts()?.data || []}>
-                {(podcast) => (
-                  <article
-                    class="podcast-card"
-                    onClick={() => props.onSelect(podcast)}
-                  >
-                    <div class="podcast-card__actions">
-                      <div class="status-pill">
-                        🎧 {podcast.episodeCount} 集
-                      </div>
-                      <button
-                        class="btn-icon btn-danger"
-                        onClick={(e) => handleDeleteClick(podcast, e)}
-                        title="删除播客"
-                      >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                          <polyline points="3 6 5 6 21 6"/>
-                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                          <line x1="10" y1="11" x2="10" y2="17"/>
-                          <line x1="14" y1="11" x2="14" y2="17"/>
-                        </svg>
-                      </button>
-                    </div>
-                    <h3>{podcast.title}</h3>
-                    <p>
-                      {podcast.description || '尚未填写描述，点击进入可在配置中完善。'}
-                    </p>
+                {(podcast) => {
+                  // 判断是否需要高亮
+                  const isHighlighted = () => highlightedPodcast() === podcast.dirName;
 
-                    <div class="podcast-card__rss">
-                      <div style={{ flex: 1 }}>
-                        <div class="text-sm text-muted" style={{ 'margin-bottom': '0.2rem' }}>
-                          RSS 订阅地址
+                  return (
+                    <article
+                      class="podcast-card"
+                      onClick={() => props.onSelect(podcast)}
+                      style={{
+                        // 高亮动画
+                        animation: isHighlighted() ? 'highlight-pulse 0.8s ease-in-out 3' : 'none',
+                        // 高亮时的边框颜色
+                        'border-color': isHighlighted() ? 'var(--primary)' : 'var(--border)',
+                        // 平滑过渡
+                        transition: 'border-color 0.3s ease, box-shadow 0.3s ease'
+                      }}
+                    >
+                      <div class="podcast-card__actions">
+                        <div class="status-pill">
+                          🎧 {podcast.episodeCount} 集
                         </div>
-                        <div class="rss-chip">/feeds/{podcast.dirName}.xml</div>
+                        <button
+                          class="btn-icon btn-danger"
+                          onClick={(e) => handleDeleteClick(podcast, e)}
+                          title="删除播客"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="3 6 5 6 21 6"/>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                            <line x1="10" y1="11" x2="10" y2="17"/>
+                            <line x1="14" y1="11" x2="14" y2="17"/>
+                          </svg>
+                        </button>
                       </div>
-                      <button
-                        class="btn btn-soft btn-sm"
-                        onClick={(e) => handleCopyRSS(podcast, e)}
-                      >
-                        {copiedPodcast() === podcast.dirName ? '✓ 已复制' : '复制'}
-                      </button>
-                    </div>
+                      <h3>{podcast.title}</h3>
+                      <p>
+                        {podcast.description || '尚未填写描述，点击进入可在配置中完善。'}
+                      </p>
 
-                    <div class="card-footer">
-                      <span>目录：{podcast.dirName}</span>
-                      <span style={{ color: 'var(--primary)' }}>管理 →</span>
-                    </div>
-                  </article>
-                )}
+                      <div class="podcast-card__rss">
+                        <div style={{ flex: 1 }}>
+                          <div class="text-sm text-muted" style={{ 'margin-bottom': '0.2rem' }}>
+                            RSS 订阅地址
+                          </div>
+                          <div class="rss-chip">/feeds/{podcast.dirName}.xml</div>
+                        </div>
+                        <button
+                          class="btn btn-soft btn-sm"
+                          onClick={(e) => handleCopyRSS(podcast, e)}
+                        >
+                          {copiedPodcast() === podcast.dirName ? '✓ 已复制' : '复制'}
+                        </button>
+                      </div>
+
+                      <div class="card-footer">
+                        <span>目录：{podcast.dirName}</span>
+                        <span style={{ color: 'var(--primary)' }}>管理 →</span>
+                      </div>
+                    </article>
+                  );
+                }}
               </For>
             </div>
           </Show>

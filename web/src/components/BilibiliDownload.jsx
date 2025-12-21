@@ -1,6 +1,6 @@
 import { createSignal, Show, For, createEffect } from 'solid-js';
-import { taskManager } from '../utils/taskManager';
 import { useToast } from './Toast';
+import { taskManager } from '../utils/taskManager';
 
 /**
  * 视频平台定义
@@ -13,11 +13,11 @@ const VIDEO_PLATFORMS = [
     enabled: true,
     placeholder: 'BV1qt4y1X7TW 或完整 URL',
     tips: [
-      '提交后任务会自动添加到下载队列',
-      '可以继续添加更多任务，无需等待',
-      '查看右下角浮动窗口了解下载进度',
-      '支持格式：完整URL、短链接、BV号、AV号',
-      '多分P视频可单独选择要下载的集数'
+      '粘贴视频链接后会自动获取视频信息',
+      '多分P视频默认全选，可手动调整',
+      '下载进度会显示在右下角的任务中心',
+      '完成后会自动刷新播客列表',
+      '支持格式：完整URL、短链接、BV号、AV号'
     ]
   },
   {
@@ -63,44 +63,58 @@ function formatDuration(seconds) {
 }
 
 /**
- * 视频下载组件（多平台支持）
+ * 防抖函数
+ */
+function debounce(fn, delay) {
+  let timeoutId;
+  return (...args) => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => fn(...args), delay);
+  };
+}
+
+/**
+ * 视频下载组件（简化版 - 使用统一任务中心）
  *
- * 这是一个重要的核心功能，放在首页顶部
- * 支持多个视频平台，当前只有 B站 可用
+ * 所有下载任务通过 taskManager 管理
+ * 进度显示在右下角的浮动任务窗口
  */
 export default function BilibiliDownload(props) {
   const toast = useToast();
 
-  // 当前选中的平台
+  // ========== 基础状态 ==========
   const [activePlatform, setActivePlatform] = createSignal('bilibili');
-
-  // 表单状态
   const [url, setUrl] = createSignal('');
   const [selectedPodcast, setSelectedPodcast] = createSignal('');
   const [episodeTitle, setEpisodeTitle] = createSignal('');
-
-  // 高级选项展开状态
   const [showAdvanced, setShowAdvanced] = createSignal(false);
 
-  // 视频信息状态
+  // ========== 视频信息状态 ==========
   const [videoInfo, setVideoInfo] = createSignal(null);
   const [fetchingInfo, setFetchingInfo] = createSignal(false);
-  const [selectedPages, setSelectedPages] = createSignal([]); // 选中的分P索引数组
+  const [selectedPages, setSelectedPages] = createSignal([]);
 
-  // 获取当前平台配置
+  // ========== 提交状态 ==========
+  const [isSubmitting, setIsSubmitting] = createSignal(false);
+
+  // ========== 获取当前平台配置 ==========
   const getCurrentPlatform = () => {
     return VIDEO_PLATFORMS.find(p => p.id === activePlatform());
   };
 
-  /**
-   * 当URL改变时，重置视频信息
-   */
-  createEffect(() => {
-    const currentUrl = url();
-    if (!currentUrl.trim()) {
+  // ========== URL 改变时自动获取视频信息（防抖500ms）==========
+  const debouncedFetchInfo = debounce((videoUrl) => {
+    if (!videoUrl || videoUrl.length < 10) {
       setVideoInfo(null);
       setSelectedPages([]);
+      return;
     }
+    handleFetchInfo();
+  }, 500);
+
+  createEffect(() => {
+    const currentUrl = url();
+    debouncedFetchInfo(currentUrl.trim());
   });
 
   /**
@@ -114,11 +128,19 @@ export default function BilibiliDownload(props) {
     }
     setActivePlatform(platformId);
     // 切换平台时清空表单
+    resetForm();
+  };
+
+  /**
+   * 重置表单
+   */
+  const resetForm = () => {
     setUrl('');
     setEpisodeTitle('');
     setShowAdvanced(false);
     setVideoInfo(null);
     setSelectedPages([]);
+    setIsSubmitting(false);
   };
 
   /**
@@ -127,7 +149,8 @@ export default function BilibiliDownload(props) {
   const handleFetchInfo = async () => {
     const videoUrl = url().trim();
     if (!videoUrl) {
-      toast.error('请输入视频地址');
+      setVideoInfo(null);
+      setSelectedPages([]);
       return;
     }
 
@@ -150,14 +173,15 @@ export default function BilibiliDownload(props) {
 
       setVideoInfo(result.data);
 
-      // 默认选中所有分P
+      // 默认全选所有分P
       if (result.data.pages && result.data.pages.length > 0) {
         setSelectedPages(result.data.pages.map(p => p.index));
       }
 
-      toast.success(`视频信息获取成功：${result.data.pages.length} 个分P`);
+      // 静默成功，不显示toast
     } catch (error) {
-      toast.error(error.message);
+      console.error('获取视频信息失败:', error);
+      // 失败时也静默，避免打扰用户
     } finally {
       setFetchingInfo(false);
     }
@@ -184,18 +208,36 @@ export default function BilibiliDownload(props) {
     if (!info || !info.pages) return;
 
     if (selectedPages().length === info.pages.length) {
-      // 当前全选，则取消全选
       setSelectedPages([]);
     } else {
-      // 否则全选
       setSelectedPages(info.pages.map(p => p.index));
     }
   };
 
   /**
-   * 处理添加任务
+   * 快捷选择：前10集
    */
-  const handleAddTask = (e) => {
+  const selectFirst10 = () => {
+    const info = videoInfo();
+    if (!info || !info.pages) return;
+    const first10 = info.pages.slice(0, 10).map(p => p.index);
+    setSelectedPages(first10);
+  };
+
+  /**
+   * 快捷选择：后10集
+   */
+  const selectLast10 = () => {
+    const info = videoInfo();
+    if (!info || !info.pages) return;
+    const last10 = info.pages.slice(-10).map(p => p.index);
+    setSelectedPages(last10);
+  };
+
+  /**
+   * 处理提交下载（使用 taskManager）
+   */
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     const videoUrl = url().trim();
@@ -221,18 +263,15 @@ export default function BilibiliDownload(props) {
     const taskData = {
       url: videoUrl,
       podcastName: selectedPodcast(),
-      autoCreatePodcast: false, // 始终为 false，强制选择播客
+      autoCreatePodcast: false,
     };
 
-    // 添加可选参数
     if (episodeTitle().trim()) {
       taskData.episodeTitle = episodeTitle().trim();
     }
 
     // 添加分P选择参数
     if (info && info.isMultiPage && selectedPages().length > 0) {
-      // 将选中的分P索引转换为BBDown格式的字符串
-      // 如果全选，使用 "ALL"
       if (selectedPages().length === info.pages.length) {
         taskData.selectPage = 'ALL';
       } else {
@@ -240,27 +279,23 @@ export default function BilibiliDownload(props) {
       }
     }
 
-    // 添加到任务队列
-    const taskId = taskManager.addTask(taskData);
+    // 使用 taskManager 添加下载任务
+    try {
+      setIsSubmitting(true);
 
-    // 显示成功提示
-    const pageInfo = info && info.isMultiPage
-      ? ` (${selectedPages().length} 个分P)`
-      : '';
-    toast.success(`任务已添加到下载队列${pageInfo}`);
+      await taskManager.addTask(taskData);
 
-    // 清空表单
-    setUrl('');
-    setEpisodeTitle('');
-    setVideoInfo(null);
-    setSelectedPages([]);
+      toast.success('下载任务已添加到任务中心');
 
-    // 不清空播客选择，方便连续添加到同一个播客
-    // setSelectedPodcast('');
+      // 清空表单（保留播客选择）
+      const podcast = selectedPodcast();
+      resetForm();
+      setSelectedPodcast(podcast);
 
-    // 通知父组件刷新播客列表（异步，不阻塞）
-    if (props.onTaskAdded) {
-      props.onTaskAdded(taskId);
+    } catch (error) {
+      toast.error(error.message || '创建下载任务失败');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -268,13 +303,16 @@ export default function BilibiliDownload(props) {
   const canSubmit = () => {
     const info = videoInfo();
 
-    // 基本条件：URL和播客都要选择
     if (!url().trim() || !selectedPodcast()) {
       return false;
     }
 
-    // 如果是多分P视频，至少要选择一个分P
     if (info && info.isMultiPage && selectedPages().length === 0) {
+      return false;
+    }
+
+    // 提交中时不能再次提交
+    if (isSubmitting()) {
       return false;
     }
 
@@ -287,7 +325,7 @@ export default function BilibiliDownload(props) {
         <div>
           <p class="eyebrow">Video Import</p>
           <h2 style={{ margin: 0 }}>视频下载与导入</h2>
-          <p>粘贴链接、选择播客即可自动下载音频并推送到目录，进度会同步到右下角任务窗口。</p>
+          <p>粘贴链接后会自动获取视频信息，选择播客即可开始下载，进度会实时显示在下方。</p>
         </div>
       </div>
 
@@ -309,37 +347,31 @@ export default function BilibiliDownload(props) {
         </For>
       </div>
 
-      <form onSubmit={handleAddTask} style={{ display: 'flex', 'flex-direction': 'column', gap: '1.25rem' }}>
+      <form onSubmit={handleSubmit} style={{ display: 'flex', 'flex-direction': 'column', gap: '1.25rem' }}>
+        {/* 基础表单 */}
         <div class="form-grid">
           <div>
             <div class="field-label">视频链接</div>
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <input
-                type="text"
-                class="input"
-                style={{ flex: 1 }}
-                placeholder={getCurrentPlatform().placeholder}
-                value={url()}
-                onInput={(e) => setUrl(e.target.value)}
-              />
-              <button
-                type="button"
-                class="btn btn-soft"
-                onClick={handleFetchInfo}
-                disabled={!url().trim() || fetchingInfo()}
-              >
-                <Show when={fetchingInfo()} fallback="获取信息">
-                  <div class="spinner" style={{ width: '1rem', height: '1rem', 'margin-right': '0.5rem' }}></div>
-                  获取中...
-                </Show>
-              </button>
-            </div>
+            <input
+              type="text"
+              class="input"
+              placeholder={getCurrentPlatform().placeholder}
+              value={url()}
+              onInput={(e) => setUrl(e.target.value)}
+              disabled={isSubmitting()}
+            />
+            <Show when={fetchingInfo()}>
+              <div style={{ 'font-size': '0.75rem', color: 'var(--text-muted)', 'margin-top': '0.25rem' }}>
+                正在获取视频信息...
+              </div>
+            </Show>
           </div>
           <div>
             <div class="field-label">目标播客</div>
             <select
               value={selectedPodcast()}
               onChange={(e) => setSelectedPodcast(e.target.value)}
+              disabled={isSubmitting()}
             >
               <option value="">请选择播客</option>
               <For each={props.podcasts}>
@@ -388,17 +420,38 @@ export default function BilibiliDownload(props) {
                   'border-radius': 'var(--radius-sm)',
                   border: '1px solid #bae6fd'
                 }}>
-                  <div style={{ display: 'flex', 'justify-content': 'space-between', 'align-items': 'center', 'margin-bottom': '0.75rem' }}>
+                  <div style={{ display: 'flex', 'justify-content': 'space-between', 'align-items': 'center', 'margin-bottom': '0.75rem', 'flex-wrap': 'wrap', gap: '0.5rem' }}>
                     <div style={{ 'font-size': '0.875rem', 'font-weight': '600', color: '#0c4a6e' }}>
                       选择要下载的分P ({selectedPages().length} / {info().pages.length})
                     </div>
-                    <button
-                      type="button"
-                      class="btn btn-soft btn-sm"
-                      onClick={toggleSelectAll}
-                    >
-                      {selectedPages().length === info().pages.length ? '取消全选' : '全选'}
-                    </button>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <button
+                        type="button"
+                        class="btn btn-soft btn-sm"
+                        onClick={toggleSelectAll}
+                        disabled={isSubmitting()}
+                      >
+                        {selectedPages().length === info().pages.length ? '取消全选' : '全选'}
+                      </button>
+                      <Show when={info().pages.length > 10}>
+                        <button
+                          type="button"
+                          class="btn btn-soft btn-sm"
+                          onClick={selectFirst10}
+                          disabled={isSubmitting()}
+                        >
+                          前10集
+                        </button>
+                        <button
+                          type="button"
+                          class="btn btn-soft btn-sm"
+                          onClick={selectLast10}
+                          disabled={isSubmitting()}
+                        >
+                          后10集
+                        </button>
+                      </Show>
+                    </div>
                   </div>
 
                   {/* 分P列表 */}
@@ -421,30 +474,19 @@ export default function BilibiliDownload(props) {
                           border: '1px solid',
                           'border-color': selectedPages().includes(page.index) ? '#0ea5e9' : '#e5e7eb',
                           background: selectedPages().includes(page.index) ? '#f0f9ff' : 'white',
-                          cursor: 'pointer',
+                          cursor: isSubmitting() ? 'not-allowed' : 'pointer',
+                          opacity: isSubmitting() ? 0.6 : 1,
                           transition: 'all 0.2s ease'
-                        }}
-                        onMouseEnter={(e) => {
-                          if (!selectedPages().includes(page.index)) {
-                            e.currentTarget.style.background = '#f9fafb';
-                            e.currentTarget.style.borderColor = '#d1d5db';
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          if (!selectedPages().includes(page.index)) {
-                            e.currentTarget.style.background = 'white';
-                            e.currentTarget.style.borderColor = '#e5e7eb';
-                          }
-                        }}
-                        >
+                        }}>
                           <input
                             type="checkbox"
                             checked={selectedPages().includes(page.index)}
                             onChange={() => togglePage(page.index)}
+                            disabled={isSubmitting()}
                             style={{
                               width: '1.125rem',
                               height: '1.125rem',
-                              cursor: 'pointer',
+                              cursor: isSubmitting() ? 'not-allowed' : 'pointer',
                               'flex-shrink': 0
                             }}
                           />
@@ -479,6 +521,7 @@ export default function BilibiliDownload(props) {
           )}
         </Show>
 
+        {/* 高级选项 */}
         <div style={{ display: 'flex', 'justify-content': 'space-between', 'align-items': 'center', gap: '1rem', 'flex-wrap': 'wrap' }}>
           <div>
             <div class="field-label" style={{ margin: 0 }}>高级选项</div>
@@ -490,6 +533,7 @@ export default function BilibiliDownload(props) {
             type="button"
             class="btn btn-soft btn-sm"
             onClick={() => setShowAdvanced(!showAdvanced())}
+            disabled={isSubmitting()}
           >
             {showAdvanced() ? '收起' : '展开'}高级选项
           </button>
@@ -504,11 +548,12 @@ export default function BilibiliDownload(props) {
               placeholder="可选，例如：第 12 期 B 站访谈"
               value={episodeTitle()}
               onInput={(e) => setEpisodeTitle(e.target.value)}
+              disabled={isSubmitting()}
             />
           </div>
         </Show>
 
-        {/* 操作按钮 */}
+        {/* 提交按钮 */}
         <div style={{ display: 'flex', gap: '0.75rem', 'padding-top': '0.5rem' }}>
           <button
             type="submit"
@@ -516,7 +561,7 @@ export default function BilibiliDownload(props) {
             disabled={!canSubmit()}
             style={{ flex: 1 }}
           >
-            开始下载
+            {isSubmitting() ? '提交中...' : '添加到下载队列'}
           </button>
         </div>
 

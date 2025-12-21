@@ -290,6 +290,15 @@ function HomePage(props) {
 function VideoDownloadPanel() {
   const [podcasts, { refetch }] = createResource(podcastsAPI.getAll);
 
+  /**
+   * 下载完成回调
+   * @param {string} podcastName - 下载完成的播客名称
+   */
+  const handleDownloadComplete = (podcastName) => {
+    // 刷新播客列表以显示新下载的文件
+    refetch();
+  };
+
   return (
     <Show
       when={!podcasts.loading}
@@ -302,7 +311,7 @@ function VideoDownloadPanel() {
     >
       <BilibiliDownload
         podcasts={podcasts()?.data || []}
-        onTaskAdded={() => setTimeout(() => refetch(), 2000)}
+        onDownloadComplete={handleDownloadComplete}
       />
     </Show>
   );

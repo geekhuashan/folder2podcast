@@ -8,7 +8,9 @@ import { BilibiliDownloadRequest } from '../types';
  *
  * 路由列表:
  * - POST /api/bilibili/info - 获取 B 站视频信息（包括分P列表）
- * - POST /api/bilibili/download - 下载 B 站视频为音频
+ * - POST /api/bilibili/download - 下载 B 站视频为音频（返回 taskId，异步执行）
+ * - GET /api/bilibili/tasks/:taskId - 查询任务进度
+ * - GET /api/bilibili/tasks - 获取所有任务（调试用）
  *
  * @param server - Fastify 实例
  * @param bilibiliService - B 站下载服务实例
@@ -101,7 +103,7 @@ export async function registerBilibiliRoutes(
 
     /**
      * POST /api/bilibili/download
-     * 下载 B 站视频为音频并添加到播客
+     * 下载 B 站视频为音频并添加到播客（异步执行，立即返回 taskId）
      *
      * 请求体:
      * {
@@ -116,14 +118,8 @@ export async function registerBilibiliRoutes(
      * {
      *   "success": true,
      *   "data": {
-     *     "filePath": "/podcasts/我的播客/第一集.m4a",
-     *     "fileName": "第一集.m4a",
-     *     "podcastName": "我的播客",
-     *     "episodeTitle": "第一集",
-     *     "videoInfo": {
-     *       "bvid": "BV1qt4y1X7TW",
-     *       "title": "原始视频标题"
-     *     }
+     *     "taskId": "uuid-xxxx-xxxx-xxxx",
+     *     "message": "下载任务已创建，请使用 taskId 查询进度"
      *   }
      * }
      */
@@ -148,25 +144,24 @@ export async function registerBilibiliRoutes(
                     url: downloadRequest.url,
                     podcastName: downloadRequest.podcastName,
                     episodeTitle: downloadRequest.episodeTitle
-                }, '开始下载 B 站视频');
+                }, '创建 B 站视频下载任务');
 
-                // 4. 调用下载服务
-                const result = await bilibiliService.downloadAudio(downloadRequest);
-
-                // 5. 清除对应播客的 Feed 缓存
-                // 这样下次访问 RSS feed 时会自动包含新下载的音频
-                feedService.clearCache(result.podcastName);
+                // 4. 调用下载服务，立即返回 taskId
+                const taskId = await bilibiliService.startDownload(downloadRequest);
 
                 server.log.info({
-                    action: 'bilibili_download_success',
-                    fileName: result.fileName,
-                    podcastName: result.podcastName
-                }, '下载完成并清除缓存');
+                    action: 'bilibili_task_created',
+                    taskId,
+                    url: downloadRequest.url
+                }, '下载任务已创建');
 
-                // 6. 返回成功响应
+                // 5. 返回 taskId
                 return reply.code(200).send({
                     success: true,
-                    data: result
+                    data: {
+                        taskId,
+                        message: '下载任务已创建，请使用 GET /api/bilibili/tasks/:taskId 查询进度'
+                    }
                 });
 
             } catch (error: any) {
@@ -175,14 +170,121 @@ export async function registerBilibiliRoutes(
                     action: 'bilibili_download_error',
                     error: error.message,
                     stack: error.stack
-                }, 'B 站视频下载失败');
+                }, 'B 站视频下载任务创建失败');
 
                 // 根据错误类型返回不同的状态码
                 const statusCode = determineErrorStatusCode(error);
 
                 return reply.code(statusCode).send({
                     success: false,
-                    error: error.message || '下载失败'
+                    error: error.message || '创建下载任务失败'
+                });
+            }
+        }
+    );
+
+    /**
+     * GET /api/bilibili/tasks/:taskId
+     * 查询下载任务进度
+     *
+     * 路径参数:
+     * - taskId: 任务 ID
+     *
+     * 响应:
+     * {
+     *   "success": true,
+     *   "data": {
+     *     "taskId": "uuid-xxxx-xxxx-xxxx",
+     *     "status": "downloading",  // pending/downloading/completed/failed
+     *     "percent": 50,
+     *     "speed": "1.5 MB/s",
+     *     "eta": "30秒",
+     *     "current": 2,
+     *     "total": 5,
+     *     "url": "BV1qt4y1X7TW",
+     *     "podcastName": "我的播客",
+     *     "episodeTitle": "第一集",
+     *     "fileName": "第一集.m4a",  // 完成后可用
+     *     "filePaths": [...],        // 完成后可用
+     *     "error": "错误信息",        // 失败时可用
+     *     "createdAt": 1234567890,
+     *     "updatedAt": 1234567890
+     *   }
+     * }
+     */
+    server.get<{ Params: { taskId: string } }>(
+        '/api/bilibili/tasks/:taskId',
+        async (request: FastifyRequest<{ Params: { taskId: string } }>, reply: FastifyReply) => {
+            try {
+                const { taskId } = request.params;
+
+                // 查询任务进度
+                const progress = bilibiliService.getTaskProgress(taskId);
+
+                if (!progress) {
+                    return reply.code(404).send({
+                        success: false,
+                        error: `任务 ${taskId} 不存在或已过期`
+                    });
+                }
+
+                // 如果任务已完成，清除对应播客的 Feed 缓存
+                if (progress.status === 'completed' && progress.podcastName) {
+                    feedService.clearCache(progress.podcastName);
+                }
+
+                return reply.code(200).send({
+                    success: true,
+                    data: progress
+                });
+
+            } catch (error: any) {
+                server.log.error({
+                    action: 'bilibili_task_query_error',
+                    error: error.message
+                }, '查询任务进度失败');
+
+                return reply.code(500).send({
+                    success: false,
+                    error: error.message || '查询任务进度失败'
+                });
+            }
+        }
+    );
+
+    /**
+     * GET /api/bilibili/tasks
+     * 获取所有下载任务（调试用）
+     *
+     * 响应:
+     * {
+     *   "success": true,
+     *   "data": [
+     *     { taskId: "...", status: "downloading", ... },
+     *     { taskId: "...", status: "completed", ... }
+     *   ]
+     * }
+     */
+    server.get(
+        '/api/bilibili/tasks',
+        async (request: FastifyRequest, reply: FastifyReply) => {
+            try {
+                const tasks = bilibiliService.getAllTasks();
+
+                return reply.code(200).send({
+                    success: true,
+                    data: tasks
+                });
+
+            } catch (error: any) {
+                server.log.error({
+                    action: 'bilibili_tasks_list_error',
+                    error: error.message
+                }, '获取任务列表失败');
+
+                return reply.code(500).send({
+                    success: false,
+                    error: error.message || '获取任务列表失败'
                 });
             }
         }
