@@ -84,15 +84,9 @@ export default function CreatePodcastModal(props) {
       // 创建播客
       await podcastsAPI.create({
         dirName: dirName,
-        metadata: {
-          title: data.title,
-          description: data.description,
-          author: data.author,
-          email: data.email,
-          language: data.language,
-          category: data.category,
-          explicit: false
-        }
+        title: data.title,
+        description: data.description,
+        author: data.author,
       });
 
       // 如果有封面，上传封面

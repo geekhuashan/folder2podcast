@@ -1,5 +1,5 @@
 // API 基础配置
-const API_BASE = '/api/v2';
+const API_BASE = '/api';
 const API_KEY = new URLSearchParams(window.location.search).get('apiKey') || '';
 
 // 添加 API Key 到 URL
@@ -20,12 +20,13 @@ async function request(url, options = {}) {
 
     const response = await fetch(addApiKey(url), {
       ...options,
+      credentials: 'include', // 携带 Cookie（Session）
       headers,
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Request failed');
+      const error = await response.json().catch(() => ({ error: 'Request failed' }));
+      throw new Error(error.error || error.message || 'Request failed');
     }
 
     return await response.json();
@@ -34,6 +35,30 @@ async function request(url, options = {}) {
     throw error;
   }
 }
+
+// ====== 认证 API ======
+export const authAPI = {
+  // 登录
+  async login(username, password) {
+    return request(`${API_BASE}/auth/login`, {
+      method: 'POST',
+      body: JSON.stringify({ username, password }),
+    });
+  },
+
+  // 登出
+  async logout() {
+    return request(`${API_BASE}/auth/logout`, {
+      method: 'POST',
+    });
+  },
+
+  // 获取当前用户
+  async getCurrentUser() {
+    return request(`${API_BASE}/auth/me`);
+  },
+};
+
 
 // 播客 API
 export const podcastsAPI = {
@@ -44,22 +69,22 @@ export const podcastsAPI = {
 
   // 创建新播客
   async create(podcastData) {
-    return request(`${API_BASE}/manage/podcasts`, {
+    return request(`${API_BASE}/podcasts`, {
       method: 'POST',
       body: JSON.stringify(podcastData),
     });
   },
 
-  // 删除播客
-  async delete(podcastDir) {
-    return request(`${API_BASE}/manage/podcasts/${encodeURIComponent(podcastDir)}`, {
+  // 删除播客（默认同时删除文件）
+  async delete(podcastId) {
+    return request(`${API_BASE}/podcasts/${encodeURIComponent(podcastId)}?deleteFiles=true`, {
       method: 'DELETE',
     });
   },
 
-  // 获取播客文件列表
-  async getFiles(podcastDir) {
-    return request(`${API_BASE}/manage/podcasts/${encodeURIComponent(podcastDir)}/files`);
+  // 获取播客文件列表（通过扫描接口）
+  async getFiles(podcastId) {
+    return request(`${API_BASE}/podcasts/${encodeURIComponent(podcastId)}/episodes`);
   },
 
   // 上传文件（带进度回调）
@@ -153,17 +178,17 @@ export const podcastsAPI = {
     );
   },
 
-  // 获取配置
-  async getConfig(podcastDir) {
-    return request(`${API_BASE}/manage/podcasts/${encodeURIComponent(podcastDir)}/config`);
+  // 获取配置（使用 GET /api/podcasts/:id 获取播客详情，包含配置）
+  async getConfig(podcastId) {
+    return request(`${API_BASE}/podcasts/${encodeURIComponent(podcastId)}`);
   },
 
-  // 更新配置
-  async updateConfig(podcastDir, config) {
+  // 更新配置（使用 PATCH /api/podcasts/:id 更新播客配置）
+  async updateConfig(podcastId, config) {
     return request(
-      `${API_BASE}/manage/podcasts/${encodeURIComponent(podcastDir)}/config`,
+      `${API_BASE}/podcasts/${encodeURIComponent(podcastId)}`,
       {
-        method: 'PUT',
+        method: 'PATCH',
         body: JSON.stringify(config),
       }
     );
@@ -199,10 +224,10 @@ export const episodesAPI = {
   // 更新剧集元数据
   async updateMetadata(podcastDir, fileName, metadata) {
     return request(
-      `${API_BASE}/podcasts/${encodeURIComponent(podcastDir)}/episodes/metadata`,
+      `${API_BASE}/podcasts/${encodeURIComponent(podcastDir)}/episodes/${encodeURIComponent(fileName)}`,
       {
-        method: 'PUT',
-        body: JSON.stringify({ fileName, metadata }),
+        method: 'PATCH',
+        body: JSON.stringify(metadata),
       }
     );
   },
@@ -210,7 +235,7 @@ export const episodesAPI = {
   // 删除剧集元数据
   async deleteMetadata(podcastDir, fileName) {
     return request(
-      `${API_BASE}/podcasts/${encodeURIComponent(podcastDir)}/episodes/${encodeURIComponent(fileName)}/metadata`,
+      `${API_BASE}/podcasts/${encodeURIComponent(podcastDir)}/episodes/${encodeURIComponent(fileName)}`,
       {
         method: 'DELETE',
       }

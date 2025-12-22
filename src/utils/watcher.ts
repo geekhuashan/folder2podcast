@@ -47,21 +47,10 @@ export function watchFolderChanges(server: PodcastServer): void {
         if (isConfigFile) {
             console.log(`检测到配置文件变化: ${fileName}，清除相关缓存...`);
         } else {
-            console.log('检测到文件变化，清除相关缓存...');
+            console.log('检测到文件变化');
         }
 
-        // 提取播客目录名
-        const dirName = extractPodcastDirName(filePath, server.audioDirectory);
-
-        if (dirName) {
-            // 清除特定播客的缓存
-            server.feed.clearCache(dirName);
-            console.log(`已清除播客 "${dirName}" 的缓存`);
-        } else {
-            // 无法确定播客目录,清除所有缓存
-            server.feed.clearCache();
-            console.log('已清除所有缓存');
-        }
+        // RSS Feed 会在下次访问时从数据库重新生成，无需主动清除缓存
     }, 1000);
 
     // 初始化 watcher

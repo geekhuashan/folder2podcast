@@ -1,10 +1,11 @@
-import { createSignal, createResource, Show } from 'solid-js';
+import { createSignal, createResource, Show, onMount } from 'solid-js';
 import PodcastList from './components/PodcastList';
 import FileManager from './components/FileManager';
 import FloatingTaskWindow from './components/FloatingTaskWindow';
 import BilibiliDownload from './components/BilibiliDownload';
+import { Login } from './components/Login';
 import { ToastProvider, useToast } from './components/Toast';
-import { podcastsAPI } from './utils/api';
+import { podcastsAPI, authAPI } from './utils/api';
 
 // 首页组件 - 展示两种创建播客的方式
 function HomePage(props) {
@@ -54,13 +55,8 @@ function HomePage(props) {
       toast.info(`正在创建播客"${folderName}"...`);
       await podcastsAPI.create({
         dirName: dirName,
-        metadata: {
-          title: folderName,
-          description: `从文件夹"${folderName}"上传的播客`,
-          language: 'zh-cn',
-          category: 'Podcast',
-          explicit: false
-        }
+        title: folderName,
+        description: `从文件夹"${folderName}"上传的播客`,
       });
 
       toast.success(`播客创建成功，开始上传 ${audioFiles.length} 个音频文件`);
@@ -129,16 +125,42 @@ function HomePage(props) {
         accept="audio/*"
       />
 
-      {/* 标题区 */}
-      <div class="home-page__header">
-        <h2 class="home-page__title">创建你的播客</h2>
-        <p class="home-page__subtitle">
-          选择一种方式开始：上传本地音频文件，或从视频平台自动提取音频
-        </p>
-      </div>
+      {/* 访客模式下隐藏创建功能,只显示浏览入口 */}
+      <Show when={props.isGuest}>
+        <div class="home-page__header">
+          <h2 class="home-page__title">欢迎访问 Folder2Podcast</h2>
+          <p class="home-page__subtitle">
+            您正在以访客模式浏览。访客模式仅支持只读访问,无法创建或修改内容。
+          </p>
+        </div>
 
-      {/* 两种方式 - 大卡片布局 */}
-      <div class="home-page__cards">
+        <div class="home-page__quick-action" style={{ 'margin-top': '2rem' }}>
+          <p class="home-page__quick-text">浏览现有播客</p>
+          <button
+            onClick={() => props.onNavigate('podcasts')}
+            class="home-page__quick-btn"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="2"/>
+              <path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14"/>
+            </svg>
+            查看播客列表
+          </button>
+        </div>
+      </Show>
+
+      {/* 登录用户显示完整功能 */}
+      <Show when={!props.isGuest}>
+        {/* 标题区 */}
+        <div class="home-page__header">
+          <h2 class="home-page__title">创建你的播客</h2>
+          <p class="home-page__subtitle">
+            选择一种方式开始：上传本地音频文件，或从视频平台自动提取音频
+          </p>
+        </div>
+
+        {/* 两种方式 - 大卡片布局 */}
+        <div class="home-page__cards">
         {/* 方式1：上传本地文件 */}
         <button
           onClick={handleSelectUpload}
@@ -283,6 +305,7 @@ function HomePage(props) {
           <p class="home-page__footer-desc">支持所有主流播客客户端</p>
         </div>
       </footer>
+      </Show>
     </div>
   );
 }
@@ -318,6 +341,42 @@ function VideoDownloadPanel() {
 }
 
 export default function App() {
+  // ====== 认证状态 ======
+  const [user, setUser] = createSignal(null);
+  const [isGuest, setIsGuest] = createSignal(false);
+  const [authLoading, setAuthLoading] = createSignal(true);
+
+  // 检查登录状态
+  onMount(async () => {
+    try {
+      const result = await authAPI.getCurrentUser();
+      setUser(result.user);
+    } catch {
+      // 未登录，显示登录页
+    } finally {
+      setAuthLoading(false);
+    }
+  });
+
+  // 处理登录成功
+  const handleLoginSuccess = (userData) => {
+    setUser(userData);
+    setIsGuest(false);
+  };
+
+  // 处理访客模式
+  const handleGuestMode = () => {
+    setIsGuest(true);
+  };
+
+  // 处理登出
+  const handleLogout = async () => {
+    await authAPI.logout();
+    setUser(null);
+    setIsGuest(false);
+  };
+
+  // ====== 原有的状态 ======
   const [currentView, setCurrentView] = createSignal('home'); // 'home' | 'download' | 'podcasts' | 'settings'
   const [sidebarOpen, setSidebarOpen] = createSignal(true);
   const [selectedPodcast, setSelectedPodcast] = createSignal(null);
@@ -357,7 +416,21 @@ export default function App() {
 
   return (
     <ToastProvider>
-      <div class="app-layout">
+      {/* 加载中状态 */}
+      <Show when={authLoading()}>
+        <div style={{ display: 'flex', 'justify-content': 'center', 'align-items': 'center', height: '100vh' }}>
+          <div class="spinner" />
+        </div>
+      </Show>
+
+      {/* 未登录且非访客模式 - 显示登录页 */}
+      <Show when={!authLoading() && !user() && !isGuest()}>
+        <Login onLoginSuccess={handleLoginSuccess} onGuestMode={handleGuestMode} />
+      </Show>
+
+      {/* 已登录或访客模式 - 显示主界面 */}
+      <Show when={!authLoading() && (user() || isGuest())}>
+        <div class="app-layout">
         {/* 侧边栏 */}
         <aside class={`sidebar ${sidebarOpen() ? '' : 'sidebar--collapsed'}`}>
           {/* Logo */}
@@ -428,7 +501,28 @@ export default function App() {
           {/* 底部信息 */}
           <div class="sidebar__footer">
             <div class="sidebar__info">
+              {/* 用户信息 */}
+              <Show when={user()}>
+                <div style={{ 'margin-bottom': '8px', 'padding-bottom': '8px', 'border-bottom': '1px solid #eee' }}>
+                  <div style={{ 'font-weight': '500' }}>👤 {user().nickname || user().username}</div>
+                </div>
+              </Show>
+              <Show when={isGuest()}>
+                <div style={{ 'margin-bottom': '8px', 'padding-bottom': '8px', 'border-bottom': '1px solid #eee' }}>
+                  <div style={{ 'font-weight': '500' }}>👁️ 访客模式（只读）</div>
+                </div>
+              </Show>
               <div>版本: v2.0.0</div>
+              {/* 登出按钮 */}
+              <Show when={user() || isGuest()}>
+                <button
+                  class="btn btn--secondary"
+                  style={{ 'margin-top': '12px', width: '100%' }}
+                  onClick={handleLogout}
+                >
+                  {user() ? '登出' : '返回登录'}
+                </button>
+              </Show>
             </div>
           </div>
         </aside>
@@ -463,7 +557,7 @@ export default function App() {
           {/* 内容区域 */}
           <main class="content-area">
             <Show when={currentView() === 'home'}>
-              <HomePage onNavigate={setCurrentView} />
+              <HomePage onNavigate={setCurrentView} isGuest={isGuest()} />
             </Show>
 
             <Show when={currentView() === 'download'}>
@@ -475,7 +569,7 @@ export default function App() {
             <Show when={currentView() === 'podcasts'}>
               <Show
                 when={view() === 'files' && selectedPodcast()}
-                fallback={<PodcastList onSelect={handleSelectPodcast} />}
+                fallback={<PodcastList onSelect={handleSelectPodcast} isGuest={isGuest()} />}
               >
                 <FileManager podcast={selectedPodcast()} onBack={handleBack} />
               </Show>
@@ -509,6 +603,7 @@ export default function App() {
 
         <FloatingTaskWindow />
       </div>
+      </Show>
     </ToastProvider>
   );
 }

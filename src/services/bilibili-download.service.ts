@@ -120,10 +120,11 @@ export class BilibiliDownloadService {
      * 5. 返回下载信息
      *
      * @param request - 下载请求参数
+     * @param userId - 用户ID（用于文件路径隔离）
      * @returns Promise<下载结果>
      * @throws Error - 当 URL 无效、下载失败或其他错误时抛出
      */
-    async downloadAudio(request: BilibiliDownloadRequest): Promise<BilibiliDownloadResult> {
+    async downloadAudio(request: BilibiliDownloadRequest, userId: string): Promise<BilibiliDownloadResult> {
         const {
             url,
             podcastName,
@@ -178,6 +179,7 @@ export class BilibiliDownloadService {
             const downloadResult = await this.downloadManager.downloadToPodcast(adapter, {
                 url,
                 podcastName: targetPodcastName,
+                userId,
                 episodeTitle,
                 selectedParts
             });
@@ -233,9 +235,10 @@ export class BilibiliDownloadService {
      * 启动下载任务（异步执行，立即返回 taskId）
      *
      * @param request - 下载请求参数
+     * @param userId - 用户ID（用于文件路径隔离）
      * @returns Promise<taskId>
      */
-    async startDownload(request: BilibiliDownloadRequest): Promise<string> {
+    async startDownload(request: BilibiliDownloadRequest, userId: string): Promise<string> {
         const {
             url,
             podcastName,
@@ -290,7 +293,7 @@ export class BilibiliDownloadService {
             this.taskProgressMap.set(taskId, initialProgress);
 
             // 4. 异步执行下载（不等待完成）
-            this.executeDownload(taskId, request, targetPodcastName).catch(error => {
+            this.executeDownload(taskId, request, targetPodcastName, userId).catch(error => {
                 console.error(`任务 ${taskId} 执行失败:`, error);
                 this.updateTaskProgress(taskId, {
                     status: 'failed',
@@ -331,11 +334,13 @@ export class BilibiliDownloadService {
      * @param taskId - 任务 ID
      * @param request - 下载请求
      * @param targetPodcastName - 目标播客名称
+     * @param userId - 用户ID（用于文件路径隔离）
      */
     private async executeDownload(
         taskId: string,
         request: BilibiliDownloadRequest,
-        targetPodcastName: string
+        targetPodcastName: string,
+        userId: string
     ): Promise<void> {
         const { url, episodeTitle, selectPage } = request;
 
@@ -366,6 +371,7 @@ export class BilibiliDownloadService {
             const downloadResult = await this.downloadManager.downloadToPodcast(adapter, {
                 url,
                 podcastName: targetPodcastName,
+                userId,
                 episodeTitle,
                 selectedParts
             });

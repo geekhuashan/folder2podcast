@@ -76,7 +76,7 @@ export default function PodcastList(props) {
 
     setIsDeleting(true);
     try {
-      await podcastsAPI.delete(podcast.dirName);
+      await podcastsAPI.delete(podcast.id); // 使用 podcast.id 而不是 podcast.dirName
       toast.success(`播客"${podcast.title}"已删除`);
       setPodcastToDelete(null);
       refetch(); // 刷新播客列表
@@ -99,15 +99,19 @@ export default function PodcastList(props) {
             <p class="eyebrow">Podcasts</p>
             <h2>播客列表</h2>
             <p class="text-muted" style={{ 'max-width': '520px' }}>
-              为不同的音频专辑创建独立的目录。点击卡片可进入文件管理，以便上传音频、更新封面或编辑配置。
+              <Show when={props.isGuest} fallback="为不同的音频专辑创建独立的目录。点击卡片可进入文件管理，以便上传音频、更新封面或编辑配置。">
+                浏览现有播客列表。访客模式下仅支持只读访问。
+              </Show>
             </p>
           </div>
-          <button
-            class="btn btn-primary"
-            onClick={() => setShowCreateModal(true)}
-          >
-            + 创建新播客
-          </button>
+          <Show when={!props.isGuest}>
+            <button
+              class="btn btn-primary"
+              onClick={() => setShowCreateModal(true)}
+            >
+              + 创建新播客
+            </button>
+          </Show>
         </div>
 
         <Show

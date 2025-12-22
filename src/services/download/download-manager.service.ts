@@ -12,6 +12,8 @@ export interface UnifiedDownloadRequest {
     url: string;
     /** 目标播客名称 */
     podcastName: string;
+    /** 用户ID（用于多用户隔离） */
+    userId: string;
     /** 自定义剧集标题（可选） */
     episodeTitle?: string;
     /** 文件命名模板（可选） */
@@ -73,7 +75,7 @@ export class DownloadManager {
         adapter: IDownloadAdapter,
         request: UnifiedDownloadRequest
     ): Promise<UnifiedDownloadResponse> {
-        const { url, podcastName, episodeTitle, fileNamePattern, selectedParts, quality } = request;
+        const { url, podcastName, userId, episodeTitle, fileNamePattern, selectedParts, quality } = request;
 
         // 1. 创建任务临时目录
         const { taskId, tempDir } = await this.tempFileManager.createTaskTempDir();
@@ -103,8 +105,8 @@ export class DownloadManager {
 
             console.log(`[DownloadManager] 下载完成，共 ${downloadResult.filePaths.length} 个文件`);
 
-            // 3. 准备目标播客目录
-            const podcastDir = path.join(this.audioDir, podcastName);
+            // 3. 准备目标播客目录（包含用户隔离）
+            const podcastDir = path.join(this.audioDir, userId, podcastName);
             await fs.ensureDir(podcastDir);
 
             // 4. 移动文件到播客目录（扁平结构）

@@ -1,26 +1,23 @@
+/**
+ * B 站视频下载路由（保留原有实现）
+ *
+ * 说明：
+ * - 保留原有的 B 站下载功能
+ * - 暂时不重构，后续可以添加权限检查
+ */
+
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { BilibiliDownloadService } from '../services/bilibili-download.service';
-import { FeedService } from '../services/feed.service';
 import { BilibiliDownloadRequest } from '../types';
+import { requireAuth } from '../middleware/auth.middleware';
+import { getCurrentUser } from '../utils/auth';
 
 /**
  * 注册 B 站视频下载相关路由
- *
- * 路由列表:
- * - POST /api/bilibili/info - 获取 B 站视频信息（包括分P列表）
- * - POST /api/bilibili/download - 下载 B 站视频为音频（返回 taskId，异步执行）
- * - GET /api/bilibili/tasks/:taskId - 查询任务进度
- * - GET /api/bilibili/tasks - 获取所有任务（调试用）
- *
- * @param server - Fastify 实例
- * @param bilibiliService - B 站下载服务实例
- * @param feedService - Feed 服务实例（用于清除缓存）
  */
-export async function registerBilibiliRoutes(
-    server: FastifyInstance,
-    bilibiliService: BilibiliDownloadService,
-    feedService: FeedService
-): Promise<void> {
+export async function registerBilibiliRoutes(server: FastifyInstance): Promise<void> {
+  // 创建服务实例（暂时保留类实例化，后续可重构为函数式）
+  const bilibiliService = new BilibiliDownloadService();
     /**
      * POST /api/bilibili/info
      * 获取 B 站视频信息（包括分P列表）
@@ -125,9 +122,13 @@ export async function registerBilibiliRoutes(
      */
     server.post<{ Body: BilibiliDownloadRequest }>(
         '/api/bilibili/download',
+        { preHandler: requireAuth },
         async (request: FastifyRequest<{ Body: BilibiliDownloadRequest }>, reply: FastifyReply) => {
             try {
-                // 1. 提取请求参数
+                // 1. 获取当前登录用户
+                const user = getCurrentUser(request);
+
+                // 2. 提取请求参数
                 const downloadRequest = request.body;
 
                 // 2. 验证必需参数
@@ -141,13 +142,14 @@ export async function registerBilibiliRoutes(
                 // 3. 记录请求日志
                 server.log.info({
                     action: 'bilibili_download_start',
+                    userId: user.id,
                     url: downloadRequest.url,
                     podcastName: downloadRequest.podcastName,
                     episodeTitle: downloadRequest.episodeTitle
                 }, '创建 B 站视频下载任务');
 
-                // 4. 调用下载服务，立即返回 taskId
-                const taskId = await bilibiliService.startDownload(downloadRequest);
+                // 4. 调用下载服务,传递 userId
+                const taskId = await bilibiliService.startDownload(downloadRequest, user.id);
 
                 server.log.info({
                     action: 'bilibili_task_created',
@@ -228,10 +230,7 @@ export async function registerBilibiliRoutes(
                     });
                 }
 
-                // 如果任务已完成，清除对应播客的 Feed 缓存
-                if (progress.status === 'completed' && progress.podcastName) {
-                    feedService.clearCache(progress.podcastName);
-                }
+                // 任务完成后，RSS Feed 会在下次访问时重新从数据库生成
 
                 return reply.code(200).send({
                     success: true,

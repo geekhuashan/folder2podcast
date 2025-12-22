@@ -33,8 +33,10 @@ const copyToClipboard = async (text) => {
 
 export default function FileManager(props) {
   const toast = useToast();
-  const [files, { refetch }] = createResource(() => props.podcast.dirName, podcastsAPI.getFiles);
-  const [episodes, { refetch: refetchEpisodes }] = createResource(() => props.podcast.dirName, episodesAPI.getEpisodes);
+  // getFiles API 也需要使用完整的播客 ID
+  const [files, { refetch }] = createResource(() => props.podcast.id, podcastsAPI.getFiles);
+  // 剧集 API 需要使用完整的播客 ID (admin:dirName)
+  const [episodes, { refetch: refetchEpisodes }] = createResource(() => props.podcast.id, episodesAPI.getEpisodes);
   const [showConfigEditor, setShowConfigEditor] = createSignal(false);
   const [playingAudio, setPlayingAudio] = createSignal(null);
   const [renaming, setRenaming] = createSignal(null);
@@ -46,9 +48,15 @@ export default function FileManager(props) {
   // 创建响应式的上传状态统计
   const uploadStats = createMemo(() => uploadState.summary);
 
+  // 从剧集数据中提取音频文件名列表
+  const audioFiles = createMemo(() => {
+    return files()?.data?.map(episode => episode.fileName) || [];
+  });
+
   // 复制 RSS 链接
   const handleCopyRSS = async () => {
-    const rssUrl = `${window.location.origin}/feeds/${encodeURIComponent(props.podcast.dirName)}.xml`;
+    // RSS Feed 使用完整的播客 ID
+    const rssUrl = `${window.location.origin}/feeds/${encodeURIComponent(props.podcast.id)}.xml`;
     const success = await copyToClipboard(rssUrl);
     if (success) {
       setRssCopied(true);
@@ -220,7 +228,7 @@ export default function FileManager(props) {
           <div style={{ flex: 1, 'min-width': '220px' }}>
             <div class="field-label" style={{ color: 'rgba(255,255,255,0.8)' }}>RSS 订阅地址</div>
             <div class="rss-url">
-              {window.location.origin}/feeds/{encodeURIComponent(props.podcast.dirName)}.xml
+              {window.location.origin}/feeds/{encodeURIComponent(props.podcast.id)}.xml
             </div>
           </div>
           <button class="btn btn-secondary" onClick={handleCopyRSS}>
@@ -237,7 +245,7 @@ export default function FileManager(props) {
         fallback={<div class="flex items-center gap-2"><div class="spinner"></div> 加载文件中...</div>}
       >
         <div class="file-section">
-          <Show when={files()?.data?.audio?.length > 0} fallback={
+          <Show when={audioFiles().length > 0} fallback={
             <div class="empty-state">
               <p>暂未上传音频文件</p>
               <p class="text-sm">支持拖入 MP3/M4A/FLAC 等常见格式，上传后自动生成 RSS。</p>
@@ -247,10 +255,10 @@ export default function FileManager(props) {
               <div class="section-header" style={{ 'align-items': 'center', 'margin-bottom': '1rem' }}>
                 <div>
                   <h3 style={{ margin: 0 }}>🎵 音频文件</h3>
-                  <p class="text-muted">{files()?.data?.audio?.length || 0} 个文件</p>
+                  <p class="text-muted">{audioFiles().length || 0} 个文件</p>
                 </div>
               </div>
-              <For each={files()?.data?.audio || []}>
+              <For each={audioFiles()}>
                 {(fileName) => (
                   <div class={`file-row ${renaming() === fileName ? 'is-editing' : ''}`}>
                     <Show
@@ -297,29 +305,6 @@ export default function FileManager(props) {
               </For>
             </section>
           </Show>
-
-          <Show when={files()?.data?.images?.length > 0}>
-            <section class="file-card">
-              <div class="section-header" style={{ 'align-items': 'center', 'margin-bottom': '1rem' }}>
-                <div>
-                  <h3 style={{ margin: 0 }}>🖼️ 图片文件</h3>
-                  <p class="text-muted">{files()?.data?.images?.length || 0} 张</p>
-                </div>
-              </div>
-              <For each={files()?.data?.images || []}>
-                {(fileName) => (
-                  <div class="file-row">
-                    <span class="file-row__name">{fileName}</span>
-                    <div class="file-actions">
-                      <button class="btn btn-sm btn-danger" onClick={() => handleDelete(fileName)}>
-                        🗑️ 删除
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </For>
-            </section>
-          </Show>
         </div>
       </Show>
 
@@ -341,7 +326,7 @@ export default function FileManager(props) {
       <EpisodeEditor
         show={showEpisodeEditor()}
         episode={editingEpisode()}
-        podcastDir={props.podcast.dirName}
+        podcastDir={props.podcast.id}
         onClose={() => setShowEpisodeEditor(false)}
         onSuccess={handleEpisodeEditSuccess}
       />

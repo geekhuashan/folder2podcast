@@ -136,3 +136,14 @@ export interface EpisodeMetadata {
 export interface EpisodesConfig {
     episodes: Record<string, EpisodeMetadata>;  // key 是音频文件名
 }
+
+// Fastify Session 类型扩展
+declare module '@fastify/session' {
+  interface FastifySessionObject {
+    user?: {
+      id: string;
+      username: string;
+      nickname: string | null;
+    };
+  }
+}

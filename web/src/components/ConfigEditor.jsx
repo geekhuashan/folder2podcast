@@ -1,4 +1,4 @@
-import { createSignal, createResource, Show, For } from 'solid-js';
+import { createSignal, createResource, Show, For, createEffect } from 'solid-js';
 import { podcastsAPI } from '../utils/api';
 import { useToast } from './Toast';
 
@@ -37,7 +37,8 @@ const CATEGORY_OPTIONS = [
 
 export default function ConfigEditor(props) {
   const toast = useToast();
-  const [config, { refetch }] = createResource(() => props.podcast.dirName, podcastsAPI.getConfig);
+  // getConfig API 需要完整的播客ID
+  const [config, { refetch }] = createResource(() => props.podcast.id, podcastsAPI.getConfig);
   const [saving, setSaving] = createSignal(false);
 
   // 折叠状态
@@ -67,7 +68,8 @@ export default function ConfigEditor(props) {
   // 获取封面文件列表
   const loadCoverImage = async () => {
     try {
-      const filesData = await podcastsAPI.getFiles(props.podcast.dirName);
+      // getFiles API 需要完整的播客ID
+      const filesData = await podcastsAPI.getFiles(props.podcast.id);
       const images = filesData?.data?.images || [];
       const cover = images.find(img => /^cover\.(jpg|jpeg|png|gif|webp)$/i.test(img));
       setCoverImage(cover || null);
@@ -77,40 +79,43 @@ export default function ConfigEditor(props) {
   };
 
   // 当配置加载完成后，填充表单
-  const initForm = () => {
+  createEffect(() => {
     const cfg = config()?.data;
+    console.log('[ConfigEditor] createEffect triggered, config data:', cfg);
     if (cfg) {
-      if (cfg.metadata) {
-        setTitle(cfg.metadata.title || '');
-        setDescription(cfg.metadata.description || '');
-        setAuthor(cfg.metadata.author || '');
-        setEmail(cfg.metadata.email || '');
-        setWebsiteUrl(cfg.metadata.websiteUrl || '');
-        setLanguage(cfg.metadata.language || 'zh-cn');
-        const cat = cfg.metadata.category || 'Podcast';
-        if (CATEGORY_OPTIONS.includes(cat)) {
-          setCategory(cat);
-          setCustomCategory('');
-        } else {
-          setCategory('custom');
-          setCustomCategory(cat);
-        }
-        setExplicit(cfg.metadata.explicit || false);
+      console.log('[ConfigEditor] Filling form with:', { title: cfg.title, description: cfg.description });
+      // 后端返回的是扁平结构,直接从顶层读取字段
+      setTitle(cfg.title || '');
+      setDescription(cfg.description || '');
+      setAuthor(cfg.author || '');
+      setEmail(cfg.email || '');
+      setWebsiteUrl(cfg.websiteUrl || '');
+      setLanguage(cfg.language || 'zh-cn');
+      const cat = cfg.category || 'Podcast';
+      if (CATEGORY_OPTIONS.includes(cat)) {
+        setCategory(cat);
+        setCustomCategory('');
+      } else {
+        setCategory('custom');
+        setCustomCategory(cat);
       }
-      if (cfg.parsing) {
-        const strategy = cfg.parsing.episodeNumberStrategy;
-        if (typeof strategy === 'object' && strategy.pattern) {
-          setEpisodeNumberStrategy('custom');
-          setCustomPattern(strategy.pattern);
-        } else {
-          setEpisodeNumberStrategy(strategy || 'prefix');
-          setCustomPattern('');
-        }
-        setUseMTime(cfg.parsing.useMTime || false);
+      setExplicit(cfg.explicit || false);
+
+      // 解析设置
+      const strategy = cfg.episodeNumberStrategy;
+      if (typeof strategy === 'object' && strategy.pattern) {
+        setEpisodeNumberStrategy('custom');
+        setCustomPattern(strategy.pattern);
+      } else {
+        setEpisodeNumberStrategy(strategy || 'prefix');
+        setCustomPattern('');
       }
+      setUseMTime(cfg.useMTime || false);
+
+      // 加载封面
+      loadCoverImage();
     }
-    loadCoverImage();
-  };
+  });
 
   // 上传封面图片
   const handleCoverUpload = async (e) => {
@@ -155,29 +160,18 @@ export default function ConfigEditor(props) {
     }
   };
 
-  // 构建完整配置对象
+  // 构建完整配置对象（扁平结构,匹配后端 API）
   const buildConfig = () => {
     const finalCategory = category() === 'custom' ? customCategory() : category();
-    let strategy = episodeNumberStrategy();
-    if (strategy === 'custom' && customPattern()) {
-      strategy = { pattern: customPattern() };
-    }
 
     return {
-      metadata: {
-        title: title(),
-        description: description(),
-        author: author(),
-        email: email(),
-        websiteUrl: websiteUrl(),
-        language: language(),
-        category: finalCategory,
-        explicit: explicit()
-      },
-      parsing: {
-        episodeNumberStrategy: strategy,
-        useMTime: useMTime()
-      }
+      title: title(),
+      description: description(),
+      author: author(),
+      language: language(),
+      category: finalCategory,
+      // 注意：后端 updatePodcast 目前只支持这些字段
+      // email, websiteUrl, explicit, parsing 等字段需要后端支持
     };
   };
 
@@ -191,7 +185,8 @@ export default function ConfigEditor(props) {
     setSaving(true);
     try {
       const fullConfig = buildConfig();
-      await podcastsAPI.updateConfig(props.podcast.dirName, fullConfig);
+      // updateConfig API 需要使用完整的播客ID
+      await podcastsAPI.updateConfig(props.podcast.id, fullConfig);
       toast.success('配置保存成功！');
       props.onClose?.();
     } catch (error) {
@@ -289,8 +284,6 @@ export default function ConfigEditor(props) {
             </div>
           }
         >
-          {initForm()}
-
           {/* 内容区域 */}
           <div style={{
             flex: 1,
