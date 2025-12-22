@@ -2,6 +2,7 @@ import { createSignal, createResource, For, Show, createEffect } from 'solid-js'
 import { podcastsAPI } from '../utils/api';
 import CreatePodcastModal from './CreatePodcastModal';
 import { useToast } from './Toast';
+import { useModal } from '../contexts/ModalContext';
 
 // 复制到剪贴板功能
 const copyToClipboard = async (text) => {
@@ -24,11 +25,12 @@ const copyToClipboard = async (text) => {
 
 export default function PodcastList(props) {
   const toast = useToast();
+  const modal = useModal();
   const [podcasts, { refetch }] = createResource(podcastsAPI.getAll);
   const [showCreateModal, setShowCreateModal] = createSignal(false);
   const [copiedPodcast, setCopiedPodcast] = createSignal(null);
-  const [podcastToDelete, setPodcastToDelete] = createSignal(null);
-  const [isDeleting, setIsDeleting] = createSignal(false);
+  const [uploading, setUploading] = createSignal(false);
+  let folderInputRef;
 
   // 高亮动画状态：记录需要高亮显示的播客
   const [highlightedPodcast, setHighlightedPodcast] = createSignal(null);
@@ -67,32 +69,135 @@ export default function PodcastList(props) {
 
   const handleDeleteClick = (podcast, e) => {
     e.stopPropagation(); // 阻止卡片点击事件
-    setPodcastToDelete(podcast);
+
+    modal.open('confirm', {
+      title: '确认删除播客',
+      message: '此操作将删除播客及其所有文件，且无法恢复',
+      confirmText: '确认删除',
+      cancelText: '取消',
+      danger: true,
+      details: (
+        <div>
+          <div style={{ 'font-weight': '600', 'margin-bottom': '0.25rem' }}>
+            {podcast.title}
+          </div>
+          <div style={{ 'font-size': '0.875rem', color: 'var(--text-muted)' }}>
+            目录：{podcast.dirName} · {podcast.episodeCount} 集
+          </div>
+        </div>
+      ),
+      onConfirm: async () => {
+        try {
+          await podcastsAPI.delete(podcast.id);
+          toast.success(`播客"${podcast.title}"已删除`);
+          refetch(); // 刷新播客列表
+        } catch (error) {
+          toast.error(`删除失败: ${error.message}`);
+        }
+      }
+    });
   };
 
-  const handleConfirmDelete = async () => {
-    const podcast = podcastToDelete();
-    if (!podcast) return;
+  // 处理文件夹上传
+  const handleFolderUpload = async (event) => {
+    const files = Array.from(event.target.files);
+    if (files.length === 0) return;
 
-    setIsDeleting(true);
-    try {
-      await podcastsAPI.delete(podcast.id); // 使用 podcast.id 而不是 podcast.dirName
-      toast.success(`播客"${podcast.title}"已删除`);
-      setPodcastToDelete(null);
-      refetch(); // 刷新播客列表
-    } catch (error) {
-      toast.error(`删除失败: ${error.message}`);
-    } finally {
-      setIsDeleting(false);
+    // 从第一个文件的路径中提取文件夹名称
+    const firstFile = files[0];
+    const pathParts = firstFile.webkitRelativePath.split('/');
+    const folderName = pathParts[0];
+
+    if (!folderName) {
+      toast.error('无法获取文件夹名称');
+      return;
     }
-  };
 
-  const handleCancelDelete = () => {
-    setPodcastToDelete(null);
+    // 过滤出音频文件
+    const audioExtensions = ['.mp3', '.m4a', '.wav', '.aac', '.ogg', '.flac', '.wma'];
+    const audioFiles = files.filter(file => {
+      const ext = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
+      return audioExtensions.includes(ext);
+    });
+
+    if (audioFiles.length === 0) {
+      toast.warning('所选文件夹中没有音频文件');
+      return;
+    }
+
+    try {
+      setUploading(true);
+
+      // 1. 使用文件夹名称自动生成播客目录名
+      const dirName = folderName
+        .toLowerCase()
+        .replace(/[\s]+/g, '-')
+        .replace(/[^\w\u4e00-\u9fa5-]/g, '')
+        .replace(/^-+|-+$/g, '')
+        .substring(0, 50);
+
+      // 2. 创建播客
+      toast.info(`正在创建播客"${folderName}"...`);
+      await podcastsAPI.create({
+        dirName: dirName,
+        title: folderName,
+        description: `从文件夹"${folderName}"上传的播客`,
+      });
+
+      toast.success(`播客创建成功，开始上传 ${audioFiles.length} 个音频文件`);
+
+      // 3. 导入上传管理器
+      const { addUploadTask, markTaskUploading, updateTaskProgress, markTaskCompleted, markTaskFailed } =
+        await import('../utils/uploadManager');
+
+      // 4. 创建上传任务并开始上传
+      for (const file of audioFiles) {
+        const taskId = addUploadTask(file, dirName);
+
+        try {
+          markTaskUploading(taskId);
+
+          await podcastsAPI.uploadFileWithProgress(
+            dirName,
+            file,
+            (loaded, total, percent) => {
+              updateTaskProgress(taskId, percent);
+            }
+          );
+
+          markTaskCompleted(taskId);
+        } catch (error) {
+          markTaskFailed(taskId, error.message);
+        }
+      }
+
+      // 5. 刷新播客列表
+      toast.success('所有文件上传完成！');
+      refetch();
+
+    } catch (error) {
+      toast.error(`创建播客失败: ${error.message}`);
+    } finally {
+      // 重置 input
+      event.target.value = '';
+      setUploading(false);
+    }
   };
 
   return (
     <>
+      {/* 隐藏的文件夹选择 input */}
+      <input
+        ref={folderInputRef}
+        type="file"
+        webkitdirectory=""
+        directory=""
+        multiple
+        style={{ display: 'none' }}
+        onChange={handleFolderUpload}
+        accept="audio/*"
+      />
+
       <section class="section-card">
         <div class="section-header">
           <div>
@@ -105,12 +210,37 @@ export default function PodcastList(props) {
             </p>
           </div>
           <Show when={!props.isGuest}>
-            <button
-              class="btn btn-primary"
-              onClick={() => setShowCreateModal(true)}
-            >
-              + 创建新播客
-            </button>
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button
+                class="btn btn-secondary"
+                onClick={() => folderInputRef?.click()}
+                disabled={uploading()}
+                style={{ cursor: uploading() ? 'wait' : 'pointer' }}
+              >
+                <Show when={uploading()} fallback="📁 上传文件夹">
+                  <div class="spinner" style={{ width: '1rem', height: '1rem', display: 'inline-block', 'margin-right': '0.5rem' }}></div>
+                  上传中...
+                </Show>
+              </button>
+              <button
+                class="btn btn-secondary"
+                onClick={props.onGoToDownload}
+                style={{ display: 'flex', 'align-items': 'center', gap: '0.5rem' }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                📺 视频下载
+              </button>
+              <button
+                class="btn btn-primary"
+                onClick={() => setShowCreateModal(true)}
+              >
+                + 创建新播客
+              </button>
+            </div>
           </Show>
         </div>
 
@@ -207,81 +337,6 @@ export default function PodcastList(props) {
         onClose={() => setShowCreateModal(false)}
         onSuccess={handleCreateSuccess}
       />
-
-      {/* 删除确认对话框 */}
-      <Show when={podcastToDelete()}>
-        <div class="modal-overlay" onClick={handleCancelDelete}>
-          <div class="modal modal--small" onClick={(e) => e.stopPropagation()}>
-            <div style={{ padding: '1.5rem' }}>
-              {/* 头部 */}
-              <div style={{ 'margin-bottom': '1.5rem', 'text-align': 'center' }}>
-                <div style={{
-                  width: '48px',
-                  height: '48px',
-                  'border-radius': '50%',
-                  background: '#fee2e2',
-                  color: '#dc2626',
-                  display: 'flex',
-                  'align-items': 'center',
-                  'justify-content': 'center',
-                  margin: '0 auto 1rem',
-                  'font-size': '24px'
-                }}>
-                  ⚠
-                </div>
-                <h2 style={{ 'font-size': '1.25rem', 'font-weight': '700', margin: '0 0 0.5rem' }}>
-                  确认删除播客
-                </h2>
-                <p style={{ 'font-size': '0.875rem', color: 'var(--text-muted)', margin: 0 }}>
-                  此操作将删除播客及其所有文件，且无法恢复
-                </p>
-              </div>
-
-              {/* 播客信息 */}
-              <div style={{
-                background: 'var(--surface-soft)',
-                padding: '1rem',
-                'border-radius': 'var(--radius-sm)',
-                'margin-bottom': '1.5rem',
-                border: '1px solid var(--border)'
-              }}>
-                <div style={{ 'font-weight': '600', 'margin-bottom': '0.25rem' }}>
-                  {podcastToDelete()?.title}
-                </div>
-                <div style={{ 'font-size': '0.875rem', color: 'var(--text-muted)' }}>
-                  目录：{podcastToDelete()?.dirName} · {podcastToDelete()?.episodeCount} 集
-                </div>
-              </div>
-
-              {/* 按钮 */}
-              <div style={{ display: 'flex', gap: '0.75rem' }}>
-                <button
-                  type="button"
-                  class="btn btn-secondary"
-                  onClick={handleCancelDelete}
-                  disabled={isDeleting()}
-                  style={{ flex: 1 }}
-                >
-                  取消
-                </button>
-                <button
-                  type="button"
-                  class="btn"
-                  onClick={handleConfirmDelete}
-                  disabled={isDeleting()}
-                  style={{
-                    flex: 1,
-                    background: '#dc2626',
-                    color: 'white'
-                  }}
-                >
-                  {isDeleting() ? '删除中...' : '确认删除'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </Show>
     </>
   );
 }

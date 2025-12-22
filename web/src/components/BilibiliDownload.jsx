@@ -13,11 +13,11 @@ const VIDEO_PLATFORMS = [
     enabled: true,
     placeholder: 'BV1qt4y1X7TW 或完整 URL',
     tips: [
-      '粘贴视频链接后会自动获取视频信息',
-      '多分P视频默认全选，可手动调整',
-      '下载进度会显示在右下角的任务中心',
-      '完成后会自动刷新播客列表',
-      '支持格式：完整URL、短链接、BV号、AV号'
+      '提交后任务会自动添加到下载队列',
+      '可以继续添加更多任务，无需等待',
+      '查看右下角浮动窗口了解下载进度',
+      '支持格式：完整URL、短链接、BV号、AV号',
+      '多分P视频可单独选择要下载的集数'
     ]
   },
   {
@@ -47,34 +47,7 @@ const VIDEO_PLATFORMS = [
 ];
 
 /**
- * 格式化时长（秒）为可读字符串
- */
-function formatDuration(seconds) {
-  if (!seconds) return '';
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const secs = seconds % 60;
-
-  if (hours > 0) {
-    return `${hours}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-  } else {
-    return `${minutes}:${String(secs).padStart(2, '0')}`;
-  }
-}
-
-/**
- * 防抖函数
- */
-function debounce(fn, delay) {
-  let timeoutId;
-  return (...args) => {
-    clearTimeout(timeoutId);
-    timeoutId = setTimeout(() => fn(...args), delay);
-  };
-}
-
-/**
- * 视频下载组件（简化版 - 使用统一任务中心）
+ * 视频下载组件（多平台支持）
  *
  * 所有下载任务通过 taskManager 管理
  * 进度显示在右下角的浮动任务窗口
@@ -82,12 +55,12 @@ function debounce(fn, delay) {
 export default function BilibiliDownload(props) {
   const toast = useToast();
 
-  // ========== 基础状态 ==========
+  // ========== 平台选择 ==========
   const [activePlatform, setActivePlatform] = createSignal('bilibili');
+
+  // ========== 基础状态 ==========
   const [url, setUrl] = createSignal('');
   const [selectedPodcast, setSelectedPodcast] = createSignal('');
-  const [episodeTitle, setEpisodeTitle] = createSignal('');
-  const [showAdvanced, setShowAdvanced] = createSignal(false);
 
   // ========== 视频信息状态 ==========
   const [videoInfo, setVideoInfo] = createSignal(null);
@@ -97,10 +70,67 @@ export default function BilibiliDownload(props) {
   // ========== 提交状态 ==========
   const [isSubmitting, setIsSubmitting] = createSignal(false);
 
-  // ========== 获取当前平台配置 ==========
+  /**
+   * 获取当前平台配置
+   */
   const getCurrentPlatform = () => {
     return VIDEO_PLATFORMS.find(p => p.id === activePlatform());
   };
+
+  /**
+   * 处理平台切换
+   */
+  const handlePlatformSwitch = (platformId) => {
+    const platform = VIDEO_PLATFORMS.find(p => p.id === platformId);
+    if (!platform.enabled) {
+      toast.info(`${platform.name} 即将推出，敬请期待`);
+      return;
+    }
+    setActivePlatform(platformId);
+    // 切换平台时清空表单
+    setUrl('');
+    setVideoInfo(null);
+    setSelectedPages([]);
+  };
+
+  /**
+   * 当平台或 URL 改变时，重置视频信息
+   */
+  createEffect(() => {
+    const currentUrl = url();
+    const platform = activePlatform();
+    if (!currentUrl.trim()) {
+      setVideoInfo(null);
+      setSelectedPages([]);
+    }
+  });
+
+  /**
+   * 防抖函数
+   */
+  function debounce(fn, delay) {
+    let timeoutId;
+    return (...args) => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => fn(...args), delay);
+    };
+  }
+
+  /**
+   * 格式化时长（秒）为可读字符串
+   */
+  function formatDuration(seconds) {
+    if (!seconds) return '';
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+
+    if (hours > 0) {
+      return `${hours}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    } else {
+      return `${minutes}:${String(secs).padStart(2, '0')}`;
+    }
+  }
 
   // ========== URL 改变时自动获取视频信息（防抖500ms）==========
   const debouncedFetchInfo = debounce((videoUrl) => {
@@ -118,30 +148,19 @@ export default function BilibiliDownload(props) {
   });
 
   /**
-   * 处理平台切换
-   */
-  const handlePlatformSwitch = (platformId) => {
-    const platform = VIDEO_PLATFORMS.find(p => p.id === platformId);
-    if (!platform.enabled) {
-      toast.info(`${platform.name} 即将推出，敬请期待`);
-      return;
-    }
-    setActivePlatform(platformId);
-    // 切换平台时清空表单
-    resetForm();
-  };
-
-  /**
    * 重置表单
    */
   const resetForm = () => {
     setUrl('');
-    setEpisodeTitle('');
-    setShowAdvanced(false);
     setVideoInfo(null);
     setSelectedPages([]);
     setIsSubmitting(false);
   };
+
+  /**
+   * 处理平台切换 - 已移除,当前只支持B站
+   */
+  // const handlePlatformSwitch = (platformId) => { ... }
 
   /**
    * 获取视频信息（包括分P列表）
@@ -266,10 +285,6 @@ export default function BilibiliDownload(props) {
       autoCreatePodcast: false,
     };
 
-    if (episodeTitle().trim()) {
-      taskData.episodeTitle = episodeTitle().trim();
-    }
-
     // 添加分P选择参数
     if (info && info.isMultiPage && selectedPages().length > 0) {
       if (selectedPages().length === info.pages.length) {
@@ -321,30 +336,62 @@ export default function BilibiliDownload(props) {
 
   return (
     <section class="section-card download-panel">
-      <div class="section-header">
-        <div>
-          <p class="eyebrow">Video Import</p>
-          <h2 style={{ margin: 0 }}>视频下载与导入</h2>
-          <p>粘贴链接后会自动获取视频信息，选择播客即可开始下载，进度会实时显示在下方。</p>
+      {/* 平台选项卡 */}
+      <div style={{ 'margin-bottom': '1.5rem' }}>
+        <div style={{
+          display: 'flex',
+          gap: '0.75rem',
+          'flex-wrap': 'wrap',
+          'border-bottom': '2px solid var(--border)',
+          'padding-bottom': '0.5rem'
+        }}>
+          <For each={VIDEO_PLATFORMS}>
+            {(platform) => (
+              <button
+                type="button"
+                class={`platform-tab ${activePlatform() === platform.id ? 'active' : ''} ${!platform.enabled ? 'disabled' : ''}`}
+                onClick={() => handlePlatformSwitch(platform.id)}
+                disabled={!platform.enabled}
+                style={{
+                  padding: '0.625rem 1.25rem',
+                  border: 'none',
+                  background: activePlatform() === platform.id ? 'var(--primary)' : 'var(--surface-soft)',
+                  color: activePlatform() === platform.id ? 'white' : (platform.enabled ? 'var(--text)' : 'var(--text-muted)'),
+                  'border-radius': 'var(--radius-sm)',
+                  cursor: platform.enabled ? 'pointer' : 'not-allowed',
+                  'font-weight': activePlatform() === platform.id ? '600' : '400',
+                  'font-size': '0.9375rem',
+                  display: 'flex',
+                  'align-items': 'center',
+                  gap: '0.5rem',
+                  transition: 'all 0.2s',
+                  opacity: platform.enabled ? 1 : 0.5
+                }}
+              >
+                <span>{platform.icon}</span>
+                <span>{platform.name}</span>
+                <Show when={!platform.enabled}>
+                  <span style={{ 'font-size': '0.75rem', opacity: 0.7 }}>(即将推出)</span>
+                </Show>
+              </button>
+            )}
+          </For>
         </div>
       </div>
 
-      <div class="platform-tabs">
-        <For each={VIDEO_PLATFORMS}>
-          {(platform) => (
-            <button
-              type="button"
-              class={`platform-tab ${activePlatform() === platform.id ? 'is-active' : ''} ${platform.enabled ? '' : 'is-disabled'}`}
-              onClick={() => handlePlatformSwitch(platform.id)}
-            >
-              <span>{platform.icon}</span>
-              <span>{platform.name}</span>
-              <Show when={!platform.enabled}>
-                <span style={{ fontSize: '0.75rem' }}>Soon</span>
-              </Show>
-            </button>
-          )}
-        </For>
+      <div class="section-header">
+        <div>
+          <p class="eyebrow">Video Import</p>
+          <h2 style={{ margin: 0 }}>{getCurrentPlatform()?.icon} {getCurrentPlatform()?.name}视频下载</h2>
+          <p class="text-muted" style={{ 'max-width': '600px' }}>
+            <Show when={activePlatform() === 'bilibili'}>
+              粘贴 B站 视频链接后会自动获取视频信息,选择播客即可开始下载。支持完整URL、短链接、BV号、AV号。
+            </Show>
+            <Show when={activePlatform() !== 'bilibili'}>
+              {getCurrentPlatform()?.name} 功能即将推出，敬请期待。
+            </Show>
+          </p>
+        </div>
       </div>
 
       <form onSubmit={handleSubmit} style={{ display: 'flex', 'flex-direction': 'column', gap: '1.25rem' }}>
@@ -355,7 +402,7 @@ export default function BilibiliDownload(props) {
             <input
               type="text"
               class="input"
-              placeholder={getCurrentPlatform().placeholder}
+              placeholder={getCurrentPlatform()?.placeholder || '视频链接'}
               value={url()}
               onInput={(e) => setUrl(e.target.value)}
               disabled={isSubmitting()}
@@ -369,6 +416,7 @@ export default function BilibiliDownload(props) {
           <div>
             <div class="field-label">目标播客</div>
             <select
+              class="input"
               value={selectedPodcast()}
               onChange={(e) => setSelectedPodcast(e.target.value)}
               disabled={isSubmitting()}
@@ -521,38 +569,6 @@ export default function BilibiliDownload(props) {
           )}
         </Show>
 
-        {/* 高级选项 */}
-        <div style={{ display: 'flex', 'justify-content': 'space-between', 'align-items': 'center', gap: '1rem', 'flex-wrap': 'wrap' }}>
-          <div>
-            <div class="field-label" style={{ margin: 0 }}>高级选项</div>
-            <p class="text-sm" style={{ margin: 0 }}>
-              自定义剧集标题，可覆盖下载源的默认标题。
-            </p>
-          </div>
-          <button
-            type="button"
-            class="btn btn-soft btn-sm"
-            onClick={() => setShowAdvanced(!showAdvanced())}
-            disabled={isSubmitting()}
-          >
-            {showAdvanced() ? '收起' : '展开'}高级选项
-          </button>
-        </div>
-
-        <Show when={showAdvanced()}>
-          <div class="advanced-panel" style={{ padding: '1rem', border: '1px dashed var(--border)', background: 'var(--surface-soft)', 'border-radius': 'var(--radius-sm)' }}>
-            <div class="field-label">自定义剧集标题</div>
-            <input
-              type="text"
-              class="input"
-              placeholder="可选，例如：第 12 期 B 站访谈"
-              value={episodeTitle()}
-              onInput={(e) => setEpisodeTitle(e.target.value)}
-              disabled={isSubmitting()}
-            />
-          </div>
-        </Show>
-
         {/* 提交按钮 */}
         <div style={{ display: 'flex', gap: '0.75rem', 'padding-top': '0.5rem' }}>
           <button
@@ -565,16 +581,19 @@ export default function BilibiliDownload(props) {
           </button>
         </div>
 
-        <div class="divider"></div>
-
         {/* 提示信息 */}
-        <div style={{ background: 'var(--accent-soft)', padding: '1rem', 'border-radius': 'var(--radius-sm)' }}>
-          <ul class="tips-list" style={{ margin: 0, 'padding-left': '1.2rem' }}>
-            <For each={getCurrentPlatform().tips}>
-              {(tip) => <li>{tip}</li>}
-            </For>
-          </ul>
-        </div>
+        <Show when={getCurrentPlatform()?.tips && getCurrentPlatform()?.tips.length > 0}>
+          <div style={{ background: 'var(--accent-soft)', padding: '1rem', 'border-radius': 'var(--radius-sm)', border: '1px solid var(--accent)' }}>
+            <div style={{ 'font-weight': '600', 'margin-bottom': '0.5rem', color: 'var(--text)' }}>
+              💡 使用提示
+            </div>
+            <ul class="tips-list" style={{ margin: 0, 'padding-left': '1.2rem', 'font-size': '0.875rem' }}>
+              <For each={getCurrentPlatform()?.tips || []}>
+                {(tip) => <li>{tip}</li>}
+              </For>
+            </ul>
+          </div>
+        </Show>
       </form>
     </section>
   );

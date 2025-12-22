@@ -1,10 +1,23 @@
+/**
+ * 文件管理器 - 主从布局版本
+ *
+ * 架构：
+ * - 左侧（40%）：文件列表，支持选中
+ * - 右侧（60%）：剧集详情面板，显示选中文件的详细信息和编辑表单
+ *
+ * 特性：
+ * - 移除所有模态框，采用行内编辑
+ * - 点击文件即可在右侧面板查看和编辑
+ * - 自动保存（防抖 1 秒）
+ * - 响应式设计
+ */
+
 import { createSignal, createResource, For, Show, createMemo } from 'solid-js';
 import { podcastsAPI, episodesAPI } from '../utils/api';
 import ConfigEditor from './ConfigEditor';
-import AudioPlayer from './AudioPlayer';
-import UploadProgressWindow from './UploadProgressWindow';
-import EpisodeEditor from './EpisodeEditor';
+import EpisodeDetailsPanel from './EpisodeDetailsPanel';
 import { useToast } from './Toast';
+import { useModal } from '../contexts/ModalContext';
 import {
   addUploadTask,
   updateTaskProgress,
@@ -33,29 +46,50 @@ const copyToClipboard = async (text) => {
 
 export default function FileManager(props) {
   const toast = useToast();
-  // getFiles API 也需要使用完整的播客 ID
-  const [files, { refetch }] = createResource(() => props.podcast.id, podcastsAPI.getFiles);
-  // 剧集 API 需要使用完整的播客 ID (admin:dirName)
-  const [episodes, { refetch: refetchEpisodes }] = createResource(() => props.podcast.id, episodesAPI.getEpisodes);
-  const [showConfigEditor, setShowConfigEditor] = createSignal(false);
-  const [playingAudio, setPlayingAudio] = createSignal(null);
-  const [renaming, setRenaming] = createSignal(null);
-  const [newFileName, setNewFileName] = createSignal('');
-  const [rssCopied, setRssCopied] = createSignal(false);
-  const [editingEpisode, setEditingEpisode] = createSignal(null);
-  const [showEpisodeEditor, setShowEpisodeEditor] = createSignal(false);
+  const modal = useModal();
 
-  // 创建响应式的上传状态统计
+  // 资源加载
+  const [files, { refetch }] = createResource(() => props.podcast.id, podcastsAPI.getFiles);
+  const [episodes, { refetch: refetchEpisodes }] = createResource(() => props.podcast.id, episodesAPI.getEpisodes);
+
+  // 界面状态
+  const [showConfigEditor, setShowConfigEditor] = createSignal(false);
+  const [selectedFileName, setSelectedFileName] = createSignal(null);
+  const [rssCopied, setRssCopied] = createSignal(false);
+
+  // 上传状态统计
   const uploadStats = createMemo(() => uploadState.summary);
 
-  // 从剧集数据中提取音频文件名列表
+  // 音频文件列表
   const audioFiles = createMemo(() => {
     return files()?.data?.map(episode => episode.fileName) || [];
   });
 
+  // 选中的剧集详情
+  const selectedEpisode = createMemo(() => {
+    const fileName = selectedFileName();
+    if (!fileName) return null;
+
+    const episodeData = episodes()?.data?.find(ep => ep.fileName === fileName);
+    return episodeData || {
+      fileName: fileName,
+      title: fileName,
+      description: '',
+      pubDate: new Date().toISOString(),
+      imageUrl: '',
+      metadata: null
+    };
+  });
+
+  // 选中文件的音频 URL
+  const selectedAudioUrl = createMemo(() => {
+    const fileName = selectedFileName();
+    if (!fileName) return null;
+    return `/audio/${encodeURIComponent(props.podcast.dirName)}/${encodeURIComponent(fileName)}`;
+  });
+
   // 复制 RSS 链接
   const handleCopyRSS = async () => {
-    // RSS Feed 使用完整的播客 ID
     const rssUrl = `${window.location.origin}/feeds/${encodeURIComponent(props.podcast.id)}.xml`;
     const success = await copyToClipboard(rssUrl);
     if (success) {
@@ -76,35 +110,32 @@ export default function FileManager(props) {
       addUploadTask(file, props.podcast.dirName)
     );
 
-    // 依次上传每个文件（避免并发导致服务器压力过大）
+    // 依次上传每个文件
     for (let i = 0; i < selectedFiles.length; i++) {
       const file = selectedFiles[i];
       const taskId = taskIds[i];
 
       try {
-        // 调用带进度回调的上传方法
         await podcastsAPI.uploadFileWithProgress(
           props.podcast.dirName,
           file,
           (loaded, total, percentage) => {
-            // 更新上传进度
             updateTaskProgress(taskId, percentage);
           }
         );
 
-        // 标记任务完成
         markTaskCompleted(taskId);
       } catch (error) {
-        // 标记任务失败
         markTaskFailed(taskId, error.message);
         toast.error(`${file.name} 上传失败: ${error.message}`);
       }
     }
 
-    // 所有文件上传完成后，刷新文件列表
+    // 刷新列表
     refetch();
+    refetchEpisodes();
 
-    // 清空文件输入框
+    // 清空输入框
     e.target.value = '';
 
     // 显示完成提示
@@ -121,78 +152,36 @@ export default function FileManager(props) {
 
   // 删除文件
   const handleDelete = async (fileName) => {
-    if (!confirm(`确定要删除 "${fileName}" 吗？`)) return;
-
     try {
       await podcastsAPI.deleteFile(props.podcast.dirName, fileName);
       toast.success('文件删除成功！');
+
+      // 如果删除的是当前选中的文件，清除选中状态
+      if (selectedFileName() === fileName) {
+        setSelectedFileName(null);
+      }
+
       refetch();
+      refetchEpisodes();
     } catch (error) {
       toast.error(`删除失败: ${error.message}`);
     }
   };
 
-  // 重命名文件
-  const startRename = (fileName) => {
-    setRenaming(fileName);
-    setNewFileName(fileName);
-  };
-
-  const confirmRename = async () => {
-    const oldName = renaming();
-    const newName = newFileName();
-
-    if (!newName || newName === oldName) {
-      setRenaming(null);
-      return;
-    }
-
-    try {
-      await podcastsAPI.renameFile(props.podcast.dirName, oldName, newName);
-      toast.success('文件重命名成功！');
-      setRenaming(null);
-      refetch();
-    } catch (error) {
-      toast.error(`重命名失败: ${error.message}`);
-    }
-  };
-
-  // 编辑剧集元数据
-  const handleEditEpisode = (fileName) => {
-    // 从 episodes 数据中查找对应的剧集
-    const episodeData = episodes()?.data?.find(ep => ep.fileName === fileName);
-
-    if (!episodeData) {
-      // 如果没有找到，创建一个默认的剧集对象
-      setEditingEpisode({
-        fileName: fileName,
-        title: fileName,
-        description: '',
-        pubDate: new Date().toISOString(),
-        imageUrl: '',
-        metadata: null
-      });
-    } else {
-      setEditingEpisode(episodeData);
-    }
-
-    setShowEpisodeEditor(true);
-  };
-
   // 剧集编辑成功回调
-  const handleEpisodeEditSuccess = () => {
+  const handleEpisodeSave = () => {
     refetchEpisodes();
     refetch();
   };
 
-  // 播放音频
-  const handlePlay = (fileName) => {
-    const audioUrl = `/audio/${encodeURIComponent(props.podcast.dirName)}/${encodeURIComponent(fileName)}`;
-    setPlayingAudio({ fileName, url: audioUrl });
+  // 选中文件
+  const handleSelectFile = (fileName) => {
+    setSelectedFileName(fileName);
   };
 
   return (
     <div class="stack-lg">
+      {/* 头部 */}
       <div class="section-header">
         <div>
           <p class="eyebrow">正在管理</p>
@@ -223,10 +212,11 @@ export default function FileManager(props) {
         </div>
       </div>
 
+      {/* RSS 面板 */}
       <div class="rss-panel">
         <div style={{ display: 'flex', 'flex-wrap': 'wrap', gap: '1rem', 'align-items': 'center' }}>
           <div style={{ flex: 1, 'min-width': '220px' }}>
-            <div class="field-label" style={{ color: 'rgba(255,255,255,0.8)' }}>RSS 订阅地址</div>
+            <div class="field-label" style={{ color: 'rgba(0,0,0,0.6)' }}>RSS 订阅地址</div>
             <div class="rss-url">
               {window.location.origin}/feeds/{encodeURIComponent(props.podcast.id)}.xml
             </div>
@@ -240,99 +230,79 @@ export default function FileManager(props) {
         </p>
       </div>
 
+      {/* 主从布局 */}
       <Show
         when={!files.loading}
         fallback={<div class="flex items-center gap-2"><div class="spinner"></div> 加载文件中...</div>}
       >
-        <div class="file-section">
-          <Show when={audioFiles().length > 0} fallback={
-            <div class="empty-state">
-              <p>暂未上传音频文件</p>
-              <p class="text-sm">支持拖入 MP3/M4A/FLAC 等常见格式，上传后自动生成 RSS。</p>
-            </div>
-          }>
-            <section class="file-card">
-              <div class="section-header" style={{ 'align-items': 'center', 'margin-bottom': '1rem' }}>
+        <Show when={audioFiles().length > 0} fallback={
+          <div class="empty-state">
+            <p>暂未上传音频文件</p>
+            <p class="text-sm">支持拖入 MP3/M4A/FLAC 等常见格式，上传后自动生成 RSS。</p>
+          </div>
+        }>
+          <div class="file-manager-layout">
+            {/* 左侧：文件列表 */}
+            <div class="file-manager-list">
+              <div class="section-header" style={{ 'margin-bottom': '1rem' }}>
                 <div>
                   <h3 style={{ margin: 0 }}>🎵 音频文件</h3>
                   <p class="text-muted">{audioFiles().length || 0} 个文件</p>
                 </div>
               </div>
-              <For each={audioFiles()}>
-                {(fileName) => (
-                  <div class={`file-row ${renaming() === fileName ? 'is-editing' : ''}`}>
-                    <Show
-                      when={renaming() === fileName}
-                      fallback={<span class="file-row__name">{fileName}</span>}
+
+              <div class="file-list-container">
+                <For each={audioFiles()}>
+                  {(fileName) => (
+                    <div
+                      class={`file-list-item ${selectedFileName() === fileName ? 'selected' : ''}`}
+                      onClick={() => handleSelectFile(fileName)}
                     >
-                      <input
-                        class="input"
-                        value={newFileName()}
-                        onInput={(e) => setNewFileName(e.target.value)}
-                        onKeyPress={(e) => e.key === 'Enter' && confirmRename()}
-                      />
-                    </Show>
-                    <div class="file-actions">
-                      <Show
-                        when={renaming() === fileName}
-                        fallback={
-                          <>
-                            <button class="btn btn-sm btn-soft" onClick={() => handlePlay(fileName)}>
-                              ▶️ 试听
-                            </button>
-                            <button class="btn btn-sm btn-soft" onClick={() => handleEditEpisode(fileName)}>
-                              ✏️ 编辑元数据
-                            </button>
-                            <button class="btn btn-sm btn-soft" onClick={() => startRename(fileName)}>
-                              📝 重命名
-                            </button>
-                            <button class="btn btn-sm btn-danger" onClick={() => handleDelete(fileName)}>
-                              🗑️ 删除
-                            </button>
-                          </>
-                        }
-                      >
-                        <button class="btn btn-sm btn-primary" onClick={confirmRename}>
-                          ✓ 确认
-                        </button>
-                        <button class="btn btn-sm btn-soft" onClick={() => setRenaming(null)}>
-                          ✕ 取消
-                        </button>
+                      <div class="file-list-item__icon">🎵</div>
+                      <div class="file-list-item__content">
+                        <div class="file-list-item__name">{fileName}</div>
+                      </div>
+                      <Show when={selectedFileName() === fileName}>
+                        <div class="file-list-item__indicator">→</div>
                       </Show>
                     </div>
+                  )}
+                </For>
+              </div>
+            </div>
+
+            {/* 右侧：详情面板 */}
+            <div class="file-manager-details">
+              <Show
+                when={selectedFileName()}
+                fallback={
+                  <div class="empty-state" style={{ height: '100%', display: 'flex', 'flex-direction': 'column', 'justify-content': 'center' }}>
+                    <p style={{ 'font-size': '2rem', margin: '0 0 1rem' }}>👈</p>
+                    <p>选择左侧文件以查看详情</p>
+                    <p class="text-sm">点击文件名即可查看和编辑剧集信息</p>
                   </div>
-                )}
-              </For>
-            </section>
-          </Show>
-        </div>
+                }
+              >
+                <EpisodeDetailsPanel
+                  episode={selectedEpisode()}
+                  podcastDir={props.podcast.id}
+                  audioUrl={selectedAudioUrl()}
+                  onSave={handleEpisodeSave}
+                  onDelete={handleDelete}
+                />
+              </Show>
+            </div>
+          </div>
+        </Show>
       </Show>
 
+      {/* 配置编辑器（仍然使用模态框） */}
       <Show when={showConfigEditor()}>
         <ConfigEditor
           podcast={props.podcast}
           onClose={() => setShowConfigEditor(false)}
         />
       </Show>
-
-      <Show when={playingAudio()}>
-        <AudioPlayer
-          audio={playingAudio()}
-          onClose={() => setPlayingAudio(null)}
-        />
-      </Show>
-
-      {/* 剧集元数据编辑器 */}
-      <EpisodeEditor
-        show={showEpisodeEditor()}
-        episode={editingEpisode()}
-        podcastDir={props.podcast.id}
-        onClose={() => setShowEpisodeEditor(false)}
-        onSuccess={handleEpisodeEditSuccess}
-      />
-
-      {/* 上传进度浮动窗口 */}
-      <UploadProgressWindow />
     </div>
   );
 }
