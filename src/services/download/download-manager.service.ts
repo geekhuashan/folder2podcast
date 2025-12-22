@@ -2,6 +2,7 @@ import path from 'path';
 import fs from 'fs-extra';
 import { IDownloadAdapter, DownloadResult } from '../../adapters/base/download-adapter.interface';
 import { TempFileManager } from './temp-file-manager.service';
+import { EpisodeMetadataService } from '../episode-metadata.service';
 
 /**
  * 统一下载请求接口
@@ -118,6 +119,29 @@ export class DownloadManager {
             await this.tempFileManager.cleanupTaskTempDir(taskId);
 
             console.log(`[DownloadManager] 任务 ${taskId} 完成`);
+
+            // 6. 补充剧集元数据（封面、描述等）
+            if (movedFiles.length > 0 && downloadResult.videoInfo) {
+                try {
+                    const metadataService = new EpisodeMetadataService();
+
+                    // 返回相对路径（相对于 audioDir）
+                    const relativeFilePaths = movedFiles.map(filePath =>
+                        path.relative(this.audioDir, filePath)
+                    );
+
+                    await metadataService.enrichEpisodeMetadata(
+                        podcastName,              // 播客目录名
+                        relativeFilePaths,        // 音频文件路径列表（相对路径）
+                        downloadResult.videoInfo, // 视频信息（包含元数据）
+                        adapter,                  // 适配器（用于下载封面）
+                        url                       // 原始视频URL
+                    );
+                } catch (error) {
+                    // 元数据保存失败不影响下载结果
+                    console.warn('[DownloadManager] 保存剧集元数据失败:', error);
+                }
+            }
 
             // 返回相对路径（相对于 audioDir）
             const relativeFilePaths = movedFiles.map(filePath =>

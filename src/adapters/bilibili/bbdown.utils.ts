@@ -1,4 +1,5 @@
 import path from 'path';
+import { VideoInfo as AdapterVideoInfo } from '../base/download-adapter.interface';
 
 /**
  * 根据当前平台和架构获取 BBDown 二进制文件路径
@@ -555,4 +556,116 @@ export const formatDuration = (seconds: number): string => {
     } else {
         return `${minutes}:${String(secs).padStart(2, '0')}`;
     }
+};
+
+/**
+ * 从 BBDown -info 输出中提取发布日期
+ *
+ * @param output - BBDown -info 命令输出
+ * @returns ISO 8601 格式日期字符串，失败返回 null
+ *
+ * @example
+ * // 输入: "发布时间: 2020-07-25 21:38:46 +08:00"
+ * // 输出: "2020-07-25T21:38:46+08:00"
+ */
+export const parsePublishDate = (output: string): string | null => {
+    if (!output) return null;
+
+    // 匹配格式: "发布时间: 2020-07-25 21:38:46 +08:00"
+    const match = output.match(/发布时间[：:]\s*(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\s*([\+\-]\d{2}:\d{2})/);
+
+    if (!match) return null;
+
+    const [, date, time, timezone] = match;
+    // 转换为 ISO 8601: "2020-07-25T21:38:46+08:00"
+    return `${date}T${time}${timezone}`;
+};
+
+/**
+ * 从 BBDown -info 输出中提取UP主信息
+ *
+ * @param output - BBDown -info 命令输出
+ * @returns { name, mid } 对象
+ *
+ * @example
+ * // 输入: "UP主页: https://space.bilibili.com/403748305"
+ * // 输出: { mid: "403748305" }
+ */
+export const parseOwnerInfo = (output: string): { name?: string; mid?: string } => {
+    if (!output) return {};
+
+    const result: { name?: string; mid?: string } = {};
+
+    // 提取UP主ID：从 "UP主页: https://space.bilibili.com/403748305" 中提取
+    const midMatch = output.match(/UP主页.*space\.bilibili\.com\/(\d+)/);
+    if (midMatch) {
+        result.mid = midMatch[1];
+    }
+
+    // 注意：BBDown -info 输出不包含UP主昵称，需要从其他地方获取
+    // 这里暂时不提取昵称
+
+    return result;
+};
+
+/**
+ * 构建封面下载的 BBDown 参数
+ *
+ * @param url - 视频URL或ID
+ * @param workDir - 工作目录
+ * @param fileName - 文件名（不含扩展名）
+ * @returns 命令行参数数组
+ *
+ * @example
+ * buildCoverDownloadArgs('BV1qt4y1X7TW', '/podcasts/我的播客', '第一集')
+ * // => ['BV1qt4y1X7TW', '--cover-only', '--work-dir', '/podcasts/我的播客', '-F', '第一集']
+ */
+export const buildCoverDownloadArgs = (
+    url: string,
+    workDir: string,
+    fileName: string
+): string[] => {
+    return [
+        url,                  // 视频 URL 或 ID
+        '--cover-only',       // 仅下载封面
+        '--work-dir', workDir, // 工作目录
+        '-F', fileName        // 文件名模板
+    ];
+};
+
+/**
+ * 生成剧集描述文本
+ *
+ * @param videoInfo - 视频信息
+ * @returns 格式化的描述文本
+ *
+ * @example
+ * generateEpisodeDescription({
+ *   id: 'BV1qt4y1X7TW',
+ *   ownerMid: '403748305',
+ *   publishDate: '2020-07-25T21:38:46+08:00'
+ * })
+ * // => "BV号: BV1qt4y1X7TW\nUP主ID: 403748305\n发布日期: 2020-07-25"
+ */
+export const generateEpisodeDescription = (videoInfo: AdapterVideoInfo): string => {
+    const parts: string[] = [];
+
+    // 添加BV号
+    if (videoInfo.id) {
+        parts.push(`BV号: ${videoInfo.id}`);
+    }
+
+    // 添加UP主信息
+    if (videoInfo.ownerMid) {
+        parts.push(`UP主ID: ${videoInfo.ownerMid}`);
+    }
+
+    // 添加发布日期
+    if (videoInfo.publishDate) {
+        // 提取日期部分 "2020-07-25T21:38:46+08:00" => "2020-07-25"
+        const dateOnly = videoInfo.publishDate.split('T')[0];
+        parts.push(`发布日期: ${dateOnly}`);
+    }
+
+    return parts.join('\n');
 };

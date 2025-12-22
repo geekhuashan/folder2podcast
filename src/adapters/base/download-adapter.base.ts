@@ -80,4 +80,17 @@ export abstract class BaseDownloadAdapter implements IDownloadAdapter {
                 break;
         }
     }
+
+    /**
+     * 默认实现：不支持封面下载
+     * 子类可以覆盖此方法提供封面下载功能
+     */
+    async downloadCover(
+        url: string,
+        outputDir: string,
+        fileName: string
+    ): Promise<string | null> {
+        this.log(`平台 ${this.platform} 暂不支持封面下载`, 'warn');
+        return null;
+    }
 }

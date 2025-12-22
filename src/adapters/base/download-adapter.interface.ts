@@ -42,6 +42,16 @@ export interface VideoInfo {
     thumbnail?: string;
     /** 平台标识 */
     platform: DownloadPlatform;
+
+    // 平台特定的额外元数据（可选）
+    /** 发布日期（ISO 8601 格式） */
+    publishDate?: string;
+    /** 创作者昵称 */
+    ownerName?: string;
+    /** 创作者ID */
+    ownerMid?: string;
+    /** 视频描述 */
+    description?: string;
 }
 
 /**
@@ -122,4 +132,18 @@ export interface IDownloadAdapter {
      * @returns Promise<是否可用>
      */
     checkAvailability(): Promise<boolean>;
+
+    /**
+     * 下载视频封面图片（可选方法）
+     *
+     * @param url - 视频URL或ID
+     * @param outputDir - 输出目录（绝对路径）
+     * @param fileName - 封面文件名（不含扩展名）
+     * @returns Promise<封面文件的绝对路径>，失败返回 null
+     */
+    downloadCover?(
+        url: string,
+        outputDir: string,
+        fileName: string
+    ): Promise<string | null>;
 }

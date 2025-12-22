@@ -16,6 +16,9 @@ import {
     buildBBDownInfoArgs,
     buildBBDownArgs,
     parseVideoInfo,
+    parsePublishDate,
+    parseOwnerInfo,
+    buildCoverDownloadArgs,
     VideoInfo as BBDownVideoInfo
 } from './bbdown.utils';
 
@@ -77,8 +80,12 @@ export class BilibiliAdapter extends BaseDownloadAdapter {
                 throw new Error('无法解析视频信息');
             }
 
-            // 转换为统一的 VideoInfo 格式
-            return this.convertToVideoInfo(bbdownVideoInfo);
+            // 提取额外元数据
+            const publishDate = parsePublishDate(output);
+            const ownerInfo = parseOwnerInfo(output);
+
+            // 转换为统一的 VideoInfo 格式，包含额外元数据
+            return this.convertToVideoInfo(bbdownVideoInfo, publishDate, ownerInfo);
         } catch (error) {
             this.log(`获取视频信息失败: ${error}`, 'error');
             throw error;
@@ -297,9 +304,13 @@ export class BilibiliAdapter extends BaseDownloadAdapter {
     }
 
     /**
-     * 转换 BBDown 视频信息为统一格式
+     * 转换 BBDown 视频信息为统一格式，包含额外元数据
      */
-    private convertToVideoInfo(bbdownInfo: BBDownVideoInfo): VideoInfo {
+    private convertToVideoInfo(
+        bbdownInfo: BBDownVideoInfo,
+        publishDate?: string | null,
+        ownerInfo?: { name?: string; mid?: string }
+    ): VideoInfo {
         const parts: VideoPartInfo[] = bbdownInfo.pages.map(page => ({
             index: page.index,
             title: page.title,
@@ -315,7 +326,12 @@ export class BilibiliAdapter extends BaseDownloadAdapter {
             isMultiPart: bbdownInfo.isMultiPage,
             parts,
             thumbnail: undefined,
-            platform: DownloadPlatform.BILIBILI
+            platform: DownloadPlatform.BILIBILI,
+
+            // 添加额外元数据
+            publishDate: publishDate || undefined,
+            ownerName: ownerInfo?.name,
+            ownerMid: ownerInfo?.mid
         };
     }
 
@@ -333,5 +349,116 @@ export class BilibiliAdapter extends BaseDownloadAdapter {
             thumbnail: undefined,
             platform: DownloadPlatform.BILIBILI
         };
+    }
+
+    /**
+     * 下载视频封面
+     *
+     * @param url - 视频URL或ID
+     * @param outputDir - 输出目录（绝对路径）
+     * @param fileName - 文件名（不含扩展名）
+     * @returns Promise<封面文件路径>，失败返回 null
+     */
+    async downloadCover(
+        url: string,
+        outputDir: string,
+        fileName: string
+    ): Promise<string | null> {
+        this.log(`下载封面: ${url} -> ${fileName}.jpg`);
+
+        // 验证 URL
+        if (!this.isValidUrl(url)) {
+            this.log(`无效的 B站视频链接: ${url}`, 'error');
+            return null;
+        }
+
+        // 提取视频 ID
+        const videoId = this.extractVideoId(url);
+        if (!videoId) {
+            this.log(`无法提取视频 ID: ${url}`, 'error');
+            return null;
+        }
+
+        // 创建临时目录（避免 BBDown 在播客目录下创建子目录）
+        const tempDir = path.join(outputDir, '.cover_temp_' + Date.now());
+
+        try {
+            // 确保临时目录存在
+            await fs.ensureDir(tempDir);
+
+            // 构建封面下载参数（使用临时目录）
+            const bbdownPath = getBBDownPath();
+            const args = buildCoverDownloadArgs(videoId, tempDir, fileName);
+
+            this.log(`执行命令: ${bbdownPath} ${args.join(' ')}`);
+
+            // 执行下载
+            await this.executeBBDown(bbdownPath, args);
+
+            // 递归查找下载的封面文件（BBDown 可能创建了子目录）
+            const coverFiles = await this.findCoverFiles(tempDir);
+
+            if (coverFiles.length === 0) {
+                this.log('封面下载完成，但未找到封面文件', 'warn');
+                return null;
+            }
+
+            // 移动第一个封面文件到目标目录
+            const sourceCover = coverFiles[0];
+            const ext = path.extname(sourceCover);
+            const targetCover = path.join(outputDir, `${fileName}${ext}`);
+
+            await fs.move(sourceCover, targetCover, { overwrite: true });
+            this.log(`封面下载成功: ${targetCover}`);
+
+            return targetCover;
+
+        } catch (error) {
+            this.log(`封面下载失败: ${error}`, 'error');
+            return null;
+        } finally {
+            // 清理临时目录
+            try {
+                await fs.remove(tempDir);
+            } catch (cleanupError) {
+                this.log(`清理临时目录失败: ${cleanupError}`, 'warn');
+            }
+        }
+    }
+
+    /**
+     * 递归查找封面文件
+     *
+     * @param dir - 搜索目录
+     * @returns 封面文件路径列表
+     */
+    private async findCoverFiles(dir: string): Promise<string[]> {
+        const coverExtensions = ['.jpg', '.jpeg', '.png', '.webp'];
+        const files: string[] = [];
+
+        const search = async (currentDir: string): Promise<void> => {
+            const entries = await fs.readdir(currentDir, { withFileTypes: true });
+
+            for (const entry of entries) {
+                const fullPath = path.join(currentDir, entry.name);
+
+                if (entry.isDirectory()) {
+                    // 递归搜索子目录
+                    await search(fullPath);
+                } else if (entry.isFile()) {
+                    // 检查是否为图片文件
+                    const isImage = coverExtensions.some(ext =>
+                        entry.name.toLowerCase().endsWith(ext)
+                    );
+
+                    if (isImage) {
+                        files.push(fullPath);
+                    }
+                }
+            }
+        };
+
+        await search(dir);
+        return files;
     }
 }
