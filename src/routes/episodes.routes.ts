@@ -65,11 +65,12 @@ export async function registerEpisodesRoutes(server: FastifyInstance) {
    * 说明：
    * - 需要登录
    * - 只能更新自己播客的剧集
-   * - 支持更新 title, description, pubDate, coverUrl
+   * - 支持更新 title, description, pubDate, coverUrl, sortOrder
+   * - sortOrder 变更后，pubDate 会在下次 Feed 生成时自动重新计算
    */
   server.patch<{
     Params: { id: string; fileName: string };
-    Body: { title?: string; description?: string; pubDate?: string; coverUrl?: string };
+    Body: { title?: string; description?: string; pubDate?: string; coverUrl?: string; sortOrder?: number };
   }>(
     '/api/podcasts/:id/episodes/:fileName',
     { preHandler: requireAuth },
@@ -245,6 +246,78 @@ export async function registerEpisodesRoutes(server: FastifyInstance) {
         return { success: true };
       } catch (error: any) {
         console.error('删除剧集封面失败:', error);
+        return reply.code(500).send({ error: error.message });
+      }
+    }
+  );
+
+  /**
+   * 重新发布剧集
+   * POST /api/podcasts/:id/episodes/:fileName/republish
+   *
+   * 功能：
+   * - 将剧集的 version 字段 +1
+   * - 更新 pubDate 为当前时间
+   * - 这会改变 RSS Feed 中的 GUID,客户端将其识别为"新剧集"
+   *
+   * 使用场景：
+   * - 让已收听过的用户重新看到"未收听"标记
+   * - 将旧内容推送到播客订阅的最前面
+   */
+  server.post<{ Params: { id: string; fileName: string } }>(
+    '/api/podcasts/:id/episodes/:fileName/republish',
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      const user = getCurrentUser(request);
+      const { id, fileName } = request.params;
+
+      try {
+        // 解码文件名
+        const decodedFileName = decodeURIComponent(fileName);
+
+        // 解析 podcastId
+        const [userId, dirName] = id.split(':');
+        if (userId !== user.id) {
+          return reply.code(403).send({ error: '无权限操作此播客' });
+        }
+
+        // 查询剧集信息
+        const episodeId = `${id}:${decodedFileName}`;
+        const episode = await db
+          .select()
+          .from(episodesTable)
+          .where(eq(episodesTable.id, episodeId))
+          .get();
+
+        if (!episode) {
+          return reply.code(404).send({ error: '剧集不存在' });
+        }
+
+        // ⭐ 重新发布：version++ 并更新 pubDate
+        const newVersion = (episode.version || 1) + 1;
+        const updated = await db
+          .update(episodesTable)
+          .set({
+            version: newVersion,
+            pubDate: new Date(),  // 设置为当前时间
+            updatedAt: new Date(),
+          })
+          .where(eq(episodesTable.id, episodeId))
+          .returning()
+          .get();
+
+        console.log(`[重新发布] ${decodedFileName}: version ${episode.version || 1} → ${newVersion}`);
+
+        return {
+          success: true,
+          data: {
+            version: newVersion,
+            pubDate: updated.pubDate,
+            message: `剧集已重新发布为 v${newVersion}，将在播客客户端中显示为新剧集`,
+          },
+        };
+      } catch (error: any) {
+        console.error('重新发布剧集失败:', error);
         return reply.code(500).send({ error: error.message });
       }
     }

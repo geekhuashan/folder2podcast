@@ -111,11 +111,18 @@ export function generateRssFeed(
     // ✅ 自动检测 MIME type
     const mimeType = getMimeType(ep.fileName);
 
+    // ⭐ 生成 GUID (支持版本号机制)
+    // version=1: 使用原始 URL
+    // version>1: 添加版本参数 ?v=2，实现"重新发布"功能
+    const guid = (ep.version && ep.version > 1)
+      ? `${audioUrl}?v=${ep.version}`
+      : audioUrl;
+
     const itemOptions: any = {
       title: episodeTitle,
       description: episodeDescription,
       url: audioUrl,
-      guid: audioUrl, // 使用音频 URL 作为唯一标识
+      guid: guid, // ⭐ 使用带版本号的 GUID
       date: ep.pubDate,
       enclosure: {
         url: audioUrl,

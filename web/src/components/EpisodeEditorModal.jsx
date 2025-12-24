@@ -24,21 +24,24 @@ export default function EpisodeEditorModal(props) {
   const [title, setTitle] = createSignal('');
   const [description, setDescription] = createSignal('');
   const [pubDate, setPubDate] = createSignal('');
+  const [sortOrder, setSortOrder] = createSignal(0);  // ⭐ 排序序号
   const [coverPreview, setCoverPreview] = createSignal('');
   const [hasCover, setHasCover] = createSignal(false);
 
   // 加载和保存状态
   const [isSaving, setIsSaving] = createSignal(false);
   const [isDeleting, setIsDeleting] = createSignal(false);
+  const [isRepublishing, setIsRepublishing] = createSignal(false);  // ⭐ 重新发布状态
 
   // 自动保存定时器
   let autoSaveTimer = null;
 
-  // 当剧集数据变化时，更新表单
+  // 当剧集数据变化时,更新表单
   createEffect(() => {
     if (props.episode) {
       setTitle(props.episode.metadata?.title || props.episode.title || '');
       setDescription(props.episode.metadata?.description || props.episode.description || '');
+      setSortOrder(props.episode.sortOrder || 0);  // ⭐ 加载序号
 
       // 处理发布时间
       if (props.episode.metadata?.pubDate || props.episode.pubDate) {
@@ -88,11 +91,15 @@ export default function EpisodeEditorModal(props) {
       const metadata = {};
       const currentTitle = title().trim();
       const currentDesc = description().trim();
+      const currentSortOrder = sortOrder();
 
       if (currentTitle) metadata.title = currentTitle;
       if (currentDesc) metadata.description = currentDesc;
       if (pubDate()) {
         metadata.pubDate = new Date(pubDate()).toISOString();
+      }
+      if (currentSortOrder > 0) {  // ⭐ 添加 sortOrder
+        metadata.sortOrder = currentSortOrder;
       }
 
       // 保存元数据
@@ -213,6 +220,32 @@ export default function EpisodeEditorModal(props) {
           } finally {
             setIsDeleting(false);
           }
+        }
+      }
+    });
+  };
+
+  // ⭐ 重新发布剧集
+  const handleRepublish = () => {
+    modal.open('confirm', {
+      title: '重新发布剧集',
+      message: `确定要重新发布 "${props.episode.fileName}" 吗？\n\n此操作会：\n• 将发布时间更新为当前时间\n• 在播客客户端中排到最前面\n• 让已收听过的用户重新看到"未收听"标记`,
+      confirmText: '重新发布',
+      cancelText: '取消',
+      onConfirm: async () => {
+        setIsRepublishing(true);
+        try {
+          await episodesAPI.republish(props.podcastDir, props.episode.fileName);
+          toast.success('剧集已重新发布！将在播客客户端中显示为新剧集');
+
+          // 刷新数据
+          if (props.onSave) {
+            props.onSave();
+          }
+        } catch (error) {
+          toast.error(`重新发布失败: ${error.message}`);
+        } finally {
+          setIsRepublishing(false);
         }
       }
     });
@@ -463,6 +496,37 @@ export default function EpisodeEditorModal(props) {
               />
             </div>
 
+            {/* 排序序号 */}
+            <div style={{ 'margin-bottom': '1.5rem' }}>
+              <label style={{
+                display: 'block',
+                'font-weight': '600',
+                'margin-bottom': '0.75rem',
+                'font-size': '0.9375rem'
+              }}>
+                排序序号
+              </label>
+              <input
+                type="number"
+                class="input"
+                min="1"
+                placeholder="设置剧集排序序号"
+                value={sortOrder()}
+                onInput={(e) => {
+                  setSortOrder(parseInt(e.target.value) || 0);
+                  scheduleAutoSave();
+                }}
+                disabled={isSaving()}
+              />
+              <div style={{
+                'margin-top': '0.5rem',
+                'font-size': '0.8125rem',
+                color: 'var(--text-muted)'
+              }}>
+                序号越小越新。序号 1 排在最前面，序号越大越靠后。修改后发布时间会自动重新生成。
+              </div>
+            </div>
+
             {/* 发布时间 */}
             <div style={{ 'margin-bottom': '1.5rem' }}>
               <label style={{
@@ -517,20 +581,37 @@ export default function EpisodeEditorModal(props) {
             gap: '0.75rem',
             'justify-content': 'space-between'
           }}>
-            <button
-              class="btn btn-danger"
-              onClick={handleDeleteFile}
-              disabled={isDeleting() || isSaving()}
-            >
-              {isDeleting() ? (
-                <>
-                  <div class="spinner" style={{ width: '1rem', height: '1rem' }}></div>
-                  删除中...
-                </>
-              ) : (
-                '🗑️ 删除此文件'
-              )}
-            </button>
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button
+                class="btn btn-danger"
+                onClick={handleDeleteFile}
+                disabled={isDeleting() || isSaving() || isRepublishing()}
+              >
+                {isDeleting() ? (
+                  <>
+                    <div class="spinner" style={{ width: '1rem', height: '1rem' }}></div>
+                    删除中...
+                  </>
+                ) : (
+                  '🗑️ 删除文件'
+                )}
+              </button>
+              <button
+                class="btn btn-secondary"
+                onClick={handleRepublish}
+                disabled={isDeleting() || isSaving() || isRepublishing()}
+                title="将此剧集重新发布为新剧集，让已收听用户重新看到"
+              >
+                {isRepublishing() ? (
+                  <>
+                    <div class="spinner" style={{ width: '1rem', height: '1rem' }}></div>
+                    重新发布中...
+                  </>
+                ) : (
+                  '🔄 重新发布'
+                )}
+              </button>
+            </div>
             <button
               class="btn btn-primary"
               onClick={handleClose}

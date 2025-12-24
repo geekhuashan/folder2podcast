@@ -204,44 +204,49 @@ export async function scanPodcastEpisodes(podcastId: string) {
     )
   );
 
-  // 同步到数据库（保留用户自定义元数据）
+  // 同步到数据库（核心原则：pubDate 一次生成永不自动改变）
+  // 先查询所有现有剧集,用于计算 sortOrder
+  const existingEpisodes = await db.select().from(episodesTable).where(eq(episodesTable.podcastId, podcastId)).all();
+  const maxSortOrder = existingEpisodes.length > 0
+    ? Math.max(...existingEpisodes.map(ep => ep.sortOrder || 0))
+    : 0;
+
+  let nextSortOrder = maxSortOrder + 1;
+
   for (const ep of episodesList) {
     const episodeId = `${podcastId}:${ep.fileName}`;
 
-    // 查询数据库中是否有自定义元数据
-    const existing = await db.select().from(episodesTable).where(eq(episodesTable.id, episodeId)).get();
+    // 查询数据库中是否已存在该剧集
+    const existing = existingEpisodes.find(e => e.id === episodeId);
 
-    // 插入或更新
-    await db
-      .insert(episodesTable)
-      .values({
+    if (!existing) {
+      // ✅ 首次扫描：创建完整记录
+      await db.insert(episodesTable).values({
         id: episodeId,
         podcastId,
         fileName: ep.fileName,
-        // 使用数据库中的自定义元数据，如果没有则用文件信息（文件信息现在包含 episodes.json 的数据）
-        title: existing?.title || ep.title,
-        description: existing?.description || ep.description, // ✅ 现在 ep.description 来自 episodes.json
-        pubDate: existing?.pubDate || ep.pubDate,
-        coverUrl: existing?.coverUrl || ep.coverUrl, // ✅ 现在 ep.coverUrl 来自 episodes.json
-        // 文件信息始终更新为最新值
+        title: ep.title,
+        description: ep.description,
+        pubDate: ep.pubDate,      // ⭐ 一次生成，永不自动改变
+        coverUrl: ep.coverUrl,
         duration: ep.duration,
         fileSize: ep.fileSize,
-      })
-      .onConflictDoUpdate({
-        target: episodesTable.id,
-        set: {
-          // ✅ 更新文件信息（文件大小、时长）
-          duration: ep.duration,
-          fileSize: ep.fileSize,
-          // ✅ 更新 episodes.json 中的元数据（如果有的话）
-          // 注意：只有当 episodes.json 中有值时才更新,否则保留数据库中的原值
-          ...(ep.title && { title: ep.title }),
-          ...(ep.description && { description: ep.description }),
-          ...(ep.pubDate && { pubDate: ep.pubDate }),
-          ...(ep.coverUrl && { coverUrl: ep.coverUrl }),
-          updatedAt: new Date(),
-        },
+        version: 1,               // ⭐ 初始版本号为 1
+        sortOrder: nextSortOrder, // ⭐ 自动生成序号
       });
+      nextSortOrder++;
+    } else {
+      // ✅ 已存在：只更新文件属性（不修改用户可编辑的元数据）
+      await db.update(episodesTable)
+        .set({
+          duration: ep.duration,    // 文件可能被重新编码
+          fileSize: ep.fileSize,    // 文件大小可能变化
+          updatedAt: new Date(),
+          // ⚠️ 不更新 title, description, pubDate, coverUrl, version, sortOrder
+          // 这些字段只能通过 Web 编辑器手动修改
+        })
+        .where(eq(episodesTable.id, episodeId));
+    }
   }
 
   // 返回合并后的剧集列表（从数据库读取）

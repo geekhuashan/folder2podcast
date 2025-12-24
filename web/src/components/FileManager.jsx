@@ -269,6 +269,7 @@ export default function FileManager(props) {
                 <div class="file-table-cell" style={{ flex: '0 0 80px', 'text-align': 'center' }}>标题</div>
                 <div class="file-table-cell" style={{ flex: '0 0 80px', 'text-align': 'center' }}>描述</div>
                 <div class="file-table-cell" style={{ flex: '0 0 80px', 'text-align': 'center' }}>封面</div>
+                <div class="file-table-cell" style={{ flex: '0 0 60px', 'text-align': 'center' }}>序号</div>
                 <div class="file-table-cell" style={{ flex: '0 0 100px', 'text-align': 'center' }}>发布时间</div>
                 <div class="file-table-cell" style={{ flex: '0 0 100px', 'text-align': 'center' }}>操作</div>
               </div>
@@ -276,9 +277,17 @@ export default function FileManager(props) {
                 {(fileName) => {
                   const episode = episodes()?.data?.find(ep => ep.fileName === fileName);
                   const hasCover = !!episode?.imageUrl;
-                  const hasCustomTitle = !!episode?.metadata?.title;
-                  const hasDescription = !!episode?.metadata?.description;
-                  const hasCustomDate = !!episode?.metadata?.pubDate;
+                  const hasCustomTitle = !!episode?.title && episode.title !== episode.fileName;
+                  const hasDescription = !!episode?.description;
+
+                  // ⭐ 格式化发布时间
+                  const formattedDate = episode?.pubDate
+                    ? new Date(episode.pubDate).toLocaleDateString('zh-CN', {
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit'
+                      })
+                    : '-';
 
                   return (
                     <div class="file-table-row">
@@ -303,10 +312,15 @@ export default function FileManager(props) {
                           {hasCover ? '✓' : '-'}
                         </span>
                       </div>
+                      <div class="file-table-cell" style={{ flex: '0 0 60px', 'text-align': 'center' }}>
+                        <div style={{ 'font-size': '0.875rem', 'font-weight': 'bold', color: episode?.sortOrder ? '#374151' : '#9ca3af' }}>
+                          {episode?.sortOrder || '-'}
+                        </div>
+                      </div>
                       <div class="file-table-cell" style={{ flex: '0 0 100px', 'text-align': 'center' }}>
-                        <span class={`field-status ${hasCustomDate ? 'field-status--yes' : 'field-status--no'}`}>
-                          {hasCustomDate ? '✓' : '-'}
-                        </span>
+                        <div style={{ 'font-size': '0.875rem', color: episode?.pubDate ? '#374151' : '#9ca3af' }}>
+                          {formattedDate}
+                        </div>
                       </div>
                       <div class="file-table-cell" style={{ flex: '0 0 100px', 'text-align': 'center' }}>
                         <button

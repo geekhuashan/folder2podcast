@@ -65,6 +65,12 @@ export const podcasts = sqliteTable('podcasts', {
   // 是否使用文件修改时间作为发布时间
   useMTime: integer('use_mtime', { mode: 'boolean' }).default(false),
 
+  // ====== 排序配置 ======
+  // pubDate 生成的基准时间（可选）
+  // 如果设置，pubDate = basePubDate + (sortOrder - 1) * 24小时
+  // 如果不设置，使用 sortOrder 最小的剧集的文件创建时间作为基准
+  basePubDate: integer('base_pub_date', { mode: 'timestamp' }),
+
   // ====== 时间戳 ======
   createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(unixepoch())`),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(unixepoch())`),
@@ -97,6 +103,18 @@ export const episodes = sqliteTable('episodes', {
   pubDate: integer('pub_date', { mode: 'timestamp' }),
   // 剧集封面 URL（相对路径，例如 "ep-episode01.jpg"）
   coverUrl: text('cover_url'),
+
+  // ====== 重新发布机制 ======
+  // 版本号（用于"重新发布"功能，改变 GUID）
+  // 默认为 1，每次"重新发布"时 +1
+  // GUID 格式：version=1 时为原始 URL，version>1 时为 URL?v=2
+  version: integer('version').default(1),
+
+  // ====== 排序机制 ======
+  // 固定序号（用于控制排序）
+  // 序号越小越新：sortOrder=1 排在最前面
+  // pubDate 根据 sortOrder 自动生成
+  sortOrder: integer('sort_order'),
 
   // ====== 文件信息（扫描时自动更新） ======
   // 音频时长（秒）

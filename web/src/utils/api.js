@@ -272,6 +272,16 @@ export const episodesAPI = {
       }
     );
   },
+
+  // ⭐ 重新发布剧集（version++ 并更新 pubDate）
+  async republish(podcastDir, fileName) {
+    return request(
+      `${API_BASE}/podcasts/${encodeURIComponent(podcastDir)}/episodes/${encodeURIComponent(fileName)}/republish`,
+      {
+        method: 'POST',
+      }
+    );
+  },
 };
 
 // B 站下载 API

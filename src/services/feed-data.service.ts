@@ -20,6 +20,7 @@ import { scanPodcastEpisodes } from './podcast';
 import { getAudioUrl, getEpisodeCoverUrl, getPodcastCoverUrl } from '../utils/url';
 import { detectPodcastCover } from '../utils/file.utils';
 import { getEnvConfig } from '../utils/env';
+import { getBasePubDate, generatePubDatesForEpisodes } from '../utils/sortOrder';
 import path from 'path';
 
 const { AUDIO_DIR } = getEnvConfig();
@@ -39,6 +40,8 @@ export interface FeedEpisode {
   duration: number | null;
   fileSize: number;
   audioUrl: string;
+  version: number;  // ⭐ 版本号（用于重新发布功能）
+  sortOrder: number;  // ⭐ 排序序号（用于控制剧集顺序）
   createdAt: Date;
   updatedAt: Date;
 }
@@ -63,6 +66,7 @@ export interface FeedPodcast {
   titleFormat: string;
   episodeNumberStrategy: string;
   useMtime: boolean;
+  basePubDate: Date | null;  // ⭐ 基准发布日期（用于 pubDate 计算）
   createdAt: Date;
   updatedAt: Date;
 }
@@ -106,22 +110,39 @@ export async function generatePodcastFeedData(podcastId: string): Promise<Podcas
     throw new Error(`播客不存在: ${podcastId}`);
   }
 
-  // 3. 从数据库读取剧集列表（已排序）
+  // 3. 从数据库读取剧集列表
   const rawEpisodes = await db
     .select()
     .from(episodesTable)
     .where(eq(episodesTable.podcastId, podcastId))
     .all();
 
-  // 4. 检测播客封面
+  // ⭐ 4. 根据 sortOrder 自动生成 pubDate
+  const baseDate = getBasePubDate(
+    { basePubDate: podcast.basePubDate ? new Date(podcast.basePubDate) : null },
+    rawEpisodes.map(ep => ({
+      sortOrder: ep.sortOrder,
+      createdAt: ep.createdAt ? new Date(ep.createdAt) : new Date(),
+    }))
+  );
+
+  const episodesWithPubDate = generatePubDatesForEpisodes(
+    rawEpisodes.map(ep => ({
+      ...ep,
+      pubDate: ep.pubDate ? new Date(ep.pubDate) : null,
+    })),
+    baseDate
+  );
+
+  // 5. 检测播客封面
   const [userId, dirName] = podcastId.split(':');
   const podcastCoverFileName = await detectPodcastCover(dirName, path.join(AUDIO_DIR, userId, dirName));
   const podcastImageUrl = podcastCoverFileName
     ? getPodcastCoverUrl(dirName)
     : null;
 
-  // 5. 转换为标准化格式，填充完整的 URL
-  const episodes: FeedEpisode[] = rawEpisodes.map((ep) => {
+  // 6. 转换为标准化格式，填充完整的 URL
+  const episodes: FeedEpisode[] = episodesWithPubDate.map((ep) => {
     // 音频 URL
     const audioUrl = getAudioUrl(dirName, ep.fileName);
 
@@ -136,18 +157,28 @@ export async function generatePodcastFeedData(podcastId: string): Promise<Podcas
       fileName: ep.fileName,
       title: ep.title || ep.fileName,  // 确保不为 null
       description: ep.description,
-      pubDate: ep.pubDate ? new Date(ep.pubDate) : new Date(),  // 处理 null
+      pubDate: ep.pubDate || new Date(),  // ⭐ 使用自动生成的 pubDate
       coverUrl: ep.coverUrl,
       imageUrl,
       duration: ep.duration,
       fileSize: ep.fileSize || 0,  // 确保不为 null
       audioUrl,
-      createdAt: ep.createdAt ? new Date(ep.createdAt) : new Date(),  // 处理 null
-      updatedAt: ep.updatedAt ? new Date(ep.updatedAt) : new Date(),  // 处理 null
+      version: ep.version || 1,
+      sortOrder: ep.sortOrder || 0,  // ⭐ 新增 sortOrder
+      createdAt: ep.createdAt ? new Date(ep.createdAt) : new Date(),
+      updatedAt: ep.updatedAt ? new Date(ep.updatedAt) : new Date(),
     };
   });
 
-  // 6. 转换播客为标准化格式
+  // ⭐ 7. 按 pubDate 降序排列（newest first）
+  // 符合播客客户端标准行为
+  episodes.sort((a, b) => {
+    const aTime = a.pubDate.getTime();
+    const bTime = b.pubDate.getTime();
+    return bTime - aTime;  // 降序：最新的在前
+  });
+
+  // 7. 转换播客为标准化格式
   const feedPodcast: FeedPodcast = {
     id: podcast.id,
     userId: podcast.userId,
@@ -165,6 +196,7 @@ export async function generatePodcastFeedData(podcastId: string): Promise<Podcas
     titleFormat: podcast.titleFormat || 'clean',
     episodeNumberStrategy: podcast.episodeNumberStrategy || 'prefix',
     useMtime: !!podcast.useMTime,  // 注意大小写：useMTime
+    basePubDate: podcast.basePubDate ? new Date(podcast.basePubDate) : null,  // ⭐ 基准日期
     createdAt: podcast.createdAt ? new Date(podcast.createdAt) : new Date(),  // 处理 null
     updatedAt: podcast.updatedAt ? new Date(podcast.updatedAt) : new Date(),  // 处理 null
   };

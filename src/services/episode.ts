@@ -20,8 +20,9 @@ import { eq } from 'drizzle-orm';
  * @returns 更新后的剧集对象
  *
  * 说明：
- * - 只更新用户自定义的字段（title, description, pubDate, coverUrl）
+ * - 只更新用户自定义的字段（title, description, pubDate, coverUrl, sortOrder）
  * - 文件信息（duration, fileSize）由扫描功能自动更新
+ * - sortOrder 变更后，pubDate 会在下次 Feed 生成时自动重新计算
  */
 export async function updateEpisodeMetadata(
   podcastId: string,
@@ -32,6 +33,7 @@ export async function updateEpisodeMetadata(
     description?: string;
     pubDate?: string;
     coverUrl?: string;
+    sortOrder?: number;
   }
 ) {
   // 检查播客所有权
