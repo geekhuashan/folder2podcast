@@ -13,12 +13,13 @@ import { requireAuth } from '../middleware/auth.middleware';
 import { getCurrentUser } from '../utils/auth';
 import { updateEpisodeMetadata, deleteEpisodeMetadata } from '../services/episode';
 import { generatePodcastFeedData } from '../services/feed-data.service';
+import { scanPodcastEpisodes } from '../services/podcast';
 import { getEpisodeCoverUrl } from '../utils/url';
 import path from 'path';
 import fs from 'fs-extra';
 import { getEnvConfig } from '../utils/env';
 import { db } from '../db';
-import { episodes as episodesTable } from '../db/schema';
+import { episodes as episodesTable, podcasts } from '../db/schema';
 import { eq } from 'drizzle-orm';
 
 const { AUDIO_DIR } = getEnvConfig();
@@ -318,6 +319,163 @@ export async function registerEpisodesRoutes(server: FastifyInstance) {
         };
       } catch (error: any) {
         console.error('重新发布剧集失败:', error);
+        return reply.code(500).send({ error: error.message });
+      }
+    }
+  );
+
+  /**
+   * 预览批量重新排序的结果
+   * POST /api/podcasts/:id/episodes/reorder/preview
+   *
+   * 功能：模拟使用新策略重新排序的结果，不实际修改数据库
+   * - 返回每个剧集的旧序号和新序号对比
+   */
+  server.post<{
+    Params: { id: string };
+    Body: { strategy: string };
+  }>(
+    '/api/podcasts/:id/episodes/reorder/preview',
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      try {
+        const podcastId = request.params.id;
+        const { strategy } = request.body;
+        const user = getCurrentUser(request);
+
+        // 验证策略参数
+        const validStrategies = ['prefix', 'suffix', 'first', 'last', 'date'];
+        if (!strategy || !validStrategies.includes(strategy)) {
+          return reply.code(400).send({
+            error: `无效的排序策略。支持的策略: ${validStrategies.join(', ')}`,
+          });
+        }
+
+        // 验证播客存在并检查权限
+        const podcast = await db.select().from(podcasts).where(eq(podcasts.id, podcastId)).get();
+        if (!podcast) {
+          return reply.code(404).send({ error: '播客不存在' });
+        }
+        if (podcast.userId !== user.id) {
+          return reply.code(403).send({ error: '无权限操作此播客' });
+        }
+
+        // 获取当前剧集列表（旧的 sortOrder）
+        const currentEpisodes = await db
+          .select()
+          .from(episodesTable)
+          .where(eq(episodesTable.podcastId, podcastId))
+          .all();
+
+        // 模拟使用新策略重新解析文件名序号
+        const { parseEpisodeNumber } = await import('../utils/episode');
+
+        const previewEpisodes = currentEpisodes.map(ep => {
+          const newNumber = parseEpisodeNumber(ep.fileName, {
+            episodeNumberStrategy: strategy as any // ⚠️ 策略已在上面验证过有效性
+          });
+          return {
+            fileName: ep.fileName,
+            title: ep.title || ep.fileName,
+            oldSortOrder: ep.sortOrder,
+            newSortOrder: newNumber,
+            changed: ep.sortOrder !== newNumber,
+          };
+        });
+
+        // 统计变化数量
+        const changedCount = previewEpisodes.filter(ep => ep.changed).length;
+
+        return {
+          success: true,
+          data: {
+            strategy,
+            total: previewEpisodes.length,
+            changed: changedCount,
+            episodes: previewEpisodes.sort((a, b) => (a.newSortOrder || 9999) - (b.newSortOrder || 9999)),
+            message: `使用 "${strategy}" 策略将影响 ${changedCount} 个剧集的排序`,
+          },
+        };
+      } catch (error: any) {
+        console.error('预览重新排序失败:', error);
+        return reply.code(500).send({ error: error.message });
+      }
+    }
+  );
+
+  /**
+   * 批量重新排序剧集
+   * POST /api/podcasts/:id/episodes/reorder
+   *
+   * 功能：根据新的文件名解析策略重新计算所有剧集的 sortOrder
+   * - 支持 prefix/suffix/first/last/date 等策略
+   * - sortOrder 更新后，pubDate 会在下次访问时自动重新计算
+   */
+  server.post<{
+    Params: { id: string };
+    Body: { strategy: string };
+  }>(
+    '/api/podcasts/:id/episodes/reorder',
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      try {
+        const podcastId = request.params.id;
+        const { strategy } = request.body;
+        const user = getCurrentUser(request);
+
+        // 验证策略参数
+        const validStrategies = ['prefix', 'suffix', 'first', 'last', 'date'];
+        if (!strategy || !validStrategies.includes(strategy)) {
+          return reply.code(400).send({
+            error: `无效的排序策略。支持的策略: ${validStrategies.join(', ')}`,
+          });
+        }
+
+        // 验证播客存在并检查权限
+        const podcast = await db.select().from(podcasts).where(eq(podcasts.id, podcastId)).get();
+        if (!podcast) {
+          return reply.code(404).send({ error: '播客不存在' });
+        }
+        if (podcast.userId !== user.id) {
+          return reply.code(403).send({ error: '无权限操作此播客' });
+        }
+
+        console.log(`[批量重新排序] 播客: ${podcastId}, 策略: ${strategy}`);
+
+        // 临时更新播客配置的排序策略
+        await db
+          .update(podcasts)
+          .set({
+            episodeNumberStrategy: strategy,
+            updatedAt: new Date(),
+          })
+          .where(eq(podcasts.id, podcastId));
+
+        // 重新扫描播客，这会自动：
+        // 1. 使用新策略重新提取文件名序号
+        // 2. 更新所有剧集的 sortOrder
+        // 3. pubDate 会在下次访问时通过 generatePubDatesForEpisodes() 自动重新计算
+        await scanPodcastEpisodes(podcastId);
+
+        // 查询更新后的剧集列表
+        const updatedEpisodes = await db
+          .select()
+          .from(episodesTable)
+          .where(eq(episodesTable.podcastId, podcastId))
+          .all();
+
+        console.log(`[批量重新排序] 成功更新 ${updatedEpisodes.length} 个剧集`);
+
+        return {
+          success: true,
+          data: {
+            updated: updatedEpisodes.length,
+            strategy,
+            message: `已使用 "${strategy}" 策略重新计算 ${updatedEpisodes.length} 个剧集的排序`,
+          },
+        };
+      } catch (error: any) {
+        console.error('批量重新排序失败:', error);
         return reply.code(500).send({ error: error.message });
       }
     }

@@ -1,6 +1,7 @@
-import { createSignal, Show, For, createEffect } from 'solid-js';
+import { createSignal, createResource, Show, For, createEffect } from 'solid-js';
 import { useToast } from './Toast';
 import { taskManager } from '../utils/taskManager';
+import { podcastsAPI } from '../utils/api';
 
 /**
  * 视频平台定义
@@ -54,6 +55,9 @@ const VIDEO_PLATFORMS = [
  */
 export default function BilibiliDownload(props) {
   const toast = useToast();
+
+  // ========== 播客列表资源（自己管理） ==========
+  const [podcasts, { refetch: refetchPodcasts }] = createResource(podcastsAPI.getAll);
 
   // ========== 平台选择 ==========
   const [activePlatform, setActivePlatform] = createSignal('bilibili');
@@ -414,15 +418,42 @@ export default function BilibiliDownload(props) {
             </Show>
           </div>
           <div>
-            <div class="field-label">目标播客</div>
+            <div class="field-label" style={{ display: 'flex', 'align-items': 'center', 'justify-content': 'space-between' }}>
+              <span>目标播客</span>
+              <button
+                type="button"
+                class="btn btn-soft btn-sm"
+                onClick={() => {
+                  refetchPodcasts();
+                  toast.success('播客列表已刷新');
+                }}
+                disabled={podcasts.loading || isSubmitting()}
+                style={{
+                  padding: '0.375rem 0.75rem',
+                  'font-size': '0.8125rem',
+                  display: 'flex',
+                  'align-items': 'center',
+                  gap: '0.375rem'
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="23 4 23 10 17 10"/>
+                  <polyline points="1 20 1 14 7 14"/>
+                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                </svg>
+                刷新
+              </button>
+            </div>
             <select
               class="input"
               value={selectedPodcast()}
               onChange={(e) => setSelectedPodcast(e.target.value)}
-              disabled={isSubmitting()}
+              disabled={isSubmitting() || podcasts.loading}
             >
-              <option value="">请选择播客</option>
-              <For each={props.podcasts}>
+              <option value="">
+                {podcasts.loading ? '加载中...' : '请选择播客'}
+              </option>
+              <For each={podcasts()?.data || []}>
                 {(podcast) => (
                   <option value={podcast.dirName}>
                     {podcast.title} ({podcast.episodeCount || 0} 集)

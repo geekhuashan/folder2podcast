@@ -282,6 +282,28 @@ export const episodesAPI = {
       }
     );
   },
+
+  // ⭐ 预览批量重新排序的结果（不实际修改数据库）
+  async reorderPreview(podcastDir, strategy) {
+    return request(
+      `${API_BASE}/podcasts/${encodeURIComponent(podcastDir)}/episodes/reorder/preview`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ strategy }),
+      }
+    );
+  },
+
+  // ⭐ 批量重新排序剧集（根据文件名策略重新计算 sortOrder）
+  async reorder(podcastDir, strategy) {
+    return request(
+      `${API_BASE}/podcasts/${encodeURIComponent(podcastDir)}/episodes/reorder`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ strategy }),
+      }
+    );
+  },
 };
 
 // B 站下载 API

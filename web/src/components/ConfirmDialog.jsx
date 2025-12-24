@@ -57,8 +57,17 @@ export default function ConfirmDialog() {
   return (
     <Show when={modal.isOpen('confirm')}>
       <div class="modal-overlay" onClick={handleCancel}>
-        <div class="modal modal--small" onClick={(e) => e.stopPropagation()}>
-          <div style={{ padding: '1.5rem' }}>
+        <div
+          class="modal modal--small"
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            'max-height': '90vh',
+            'overflow-y': 'auto',
+            display: 'flex',
+            'flex-direction': 'column'
+          }}
+        >
+          <div style={{ padding: '1.5rem', flex: 1 }}>
             {/* 图标和标题 */}
             <div style={{ 'margin-bottom': '1.5rem', 'text-align': 'center' }}>
               <div
@@ -102,8 +111,8 @@ export default function ConfirmDialog() {
               </div>
             </Show>
 
-            {/* 按钮 */}
-            <div style={{ display: 'flex', gap: '0.75rem' }}>
+            {/* 按钮 - 固定在底部 */}
+            <div style={{ display: 'flex', gap: '0.75rem', 'margin-top': 'auto' }}>
               <button
                 type="button"
                 class="btn btn-secondary"
@@ -120,7 +129,7 @@ export default function ConfirmDialog() {
                 disabled={isProcessing()}
                 style={{
                   flex: 1,
-                  background: data().danger ? '#dc2626' : 'var(--primary)',
+                  background: data().danger ? '#dc2626' : 'var(--accent)',
                   color: 'white',
                 }}
               >
