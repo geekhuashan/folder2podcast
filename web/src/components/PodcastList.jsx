@@ -3,6 +3,7 @@ import { podcastsAPI } from '../utils/api';
 import CreatePodcastModal from './CreatePodcastModal';
 import { useToast } from './Toast';
 import { useModal } from '../contexts/ModalContext';
+import { getFullFeedUrl } from '../utils/url';
 
 // 复制到剪贴板功能
 const copyToClipboard = async (text) => {
@@ -57,13 +58,14 @@ export default function PodcastList(props) {
 
   const handleCopyRSS = async (podcast, e) => {
     e.stopPropagation(); // 阻止卡片点击事件
-    const rssUrl = `${window.location.origin}/feeds/${encodeURIComponent(podcast.dirName)}.xml`;
+    // ✅ 使用统一的 URL 生成函数
+    const rssUrl = getFullFeedUrl(podcast.id);
     const success = await copyToClipboard(rssUrl);
     if (success) {
       setCopiedPodcast(podcast.dirName);
       setTimeout(() => setCopiedPodcast(null), 2000);
     } else {
-      toast.error('复制失败，请手动复制');
+      toast.error('复制失败,请手动复制');
     }
   };
 

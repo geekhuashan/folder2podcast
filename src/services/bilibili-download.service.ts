@@ -2,7 +2,7 @@ import path from 'path';
 import fs from 'fs-extra';
 import { v4 as uuidv4 } from 'uuid';
 import { getEnvConfig } from '../utils/env';
-import { BilibiliDownloadRequest, BilibiliDownloadResult } from '../types';
+import { BilibiliDownloadRequest, BilibiliDownloadResult, BilibiliVideoInfo } from '../types';
 import { getDownloadAdapterFactory } from '../adapters/adapter-factory';
 import { DownloadPlatform } from '../adapters/base/download-adapter.interface';
 import { DownloadManager } from './download/download-manager.service';
@@ -194,16 +194,31 @@ export class BilibiliDownloadService {
             const firstFilePath = path.join(AUDIO_DIR, downloadResult.filePaths[0]);
             const fileName = path.basename(firstFilePath);
 
+            // 获取视频信息（用于返回结果）
+            let videoInfo: BilibiliVideoInfo = {
+                bvid: '',
+                title: episodeTitle || 'Unknown'
+            };
+
+            try {
+                // 如果需要视频信息，可以再次获取（但通常不需要，因为元数据已保存）
+                const adapter = this.adapterFactory.getAdapter(DownloadPlatform.BILIBILI);
+                const fullVideoInfo = await this.downloadManager.getVideoInfo(adapter, url);
+                videoInfo = {
+                    bvid: fullVideoInfo.id,
+                    title: fullVideoInfo.title
+                };
+            } catch (error) {
+                console.warn('获取视频信息失败，使用默认值:', error);
+            }
+
             const result: BilibiliDownloadResult = {
                 success: true,
                 filePath: firstFilePath,
                 fileName,
                 podcastName: targetPodcastName,
-                episodeTitle: episodeTitle || downloadResult.videoInfo?.title || 'Unknown',
-                videoInfo: {
-                    bvid: downloadResult.videoInfo?.id || '',
-                    title: downloadResult.videoInfo?.title || ''
-                }
+                episodeTitle: episodeTitle || videoInfo.title,
+                videoInfo
             };
 
             console.log(`下载完成: ${fileName}（共 ${downloadResult.filePaths.length} 个文件）`);

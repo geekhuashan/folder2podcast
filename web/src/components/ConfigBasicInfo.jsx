@@ -1,6 +1,7 @@
 import { createSignal, createEffect, Show } from 'solid-js';
 import { podcastsAPI } from '../utils/api';
 import { useToast } from './Toast';
+import { getPodcastCoverUrl } from '../utils/url';
 
 /**
  * 播客配置 - 基本信息标签页
@@ -47,6 +48,15 @@ export default function ConfigBasicInfo(props) {
     } catch (error) {
       console.error('Failed to load cover image:', error);
     }
+  };
+
+  // 生成封面图片 URL
+  const coverImageUrl = () => {
+    const cover = coverImage();
+    if (!cover) return null;
+    // ✅ 使用统一的 URL 生成函数
+    // 注意: 封面文件名可能是 cover.jpg/png 等,需要使用完整路径
+    return `/audio/${encodeURIComponent(props.podcast.dirName)}/${encodeURIComponent(cover)}`;
   };
 
   // 上传封面
@@ -209,7 +219,7 @@ export default function ConfigBasicInfo(props) {
               'flex-shrink': 0
             }}>
               <img
-                src={`/audio/${encodeURIComponent(props.podcast.dirName)}/${encodeURIComponent(coverImage())}`}
+                src={coverImageUrl()}
                 alt="封面预览"
                 style={{ width: '100%', height: '100%', 'object-fit': 'cover' }}
               />

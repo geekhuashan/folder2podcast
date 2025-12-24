@@ -1,17 +1,16 @@
 /**
- * Feed 路由（重构后）
+ * Feed 路由（重构后 - 使用统一数据源）
  *
  * 说明：
- * - 从数据库读取播客和剧集信息
+ * - ✅ 使用统一的数据生成服务（generatePodcastFeedData）
+ * - ✅ 确保与 Web 管理页面的数据完全一致
  * - 公开访问（不需要登录）
  * - 生成 RSS 2.0 + iTunes 扩展的 XML
  */
 
 import { FastifyInstance } from 'fastify';
-import { db } from '../db';
-import { podcasts, episodes } from '../db/schema';
-import { eq } from 'drizzle-orm';
 import { generateRssFeed } from '../utils/feed';
+import { generatePodcastFeedData } from '../services/feed-data.service';
 
 /**
  * 注册 Feed 路由
@@ -24,26 +23,33 @@ export async function registerFeedRoutes(server: FastifyInstance) {
    * 说明：
    * - 公开访问，不需要登录
    * - id 格式: userId:dirName
-   * - 从数据库读取播客配置和剧集列表
+   * - ✅ 调用统一数据源，确保与 Web API 一致
    */
   server.get<{ Params: { id: string } }>('/feeds/:id.xml', async (request, reply) => {
     const podcastId = decodeURIComponent(request.params.id);
 
-    // 从数据库读取播客配置
-    const podcast = await db.select().from(podcasts).where(eq(podcasts.id, podcastId)).get();
-    if (!podcast) {
-      return reply.code(404).send({ error: '播客不存在' });
+    try {
+      // ✅ 调用统一数据生成服务
+      //    这一步会：
+      //    1. 扫描文件系统
+      //    2. 同步数据库
+      //    3. 检测封面
+      //    4. 返回标准化数据
+      const feedData = await generatePodcastFeedData(podcastId);
+
+      // 生成 RSS XML
+      const xml = generateRssFeed(feedData.podcast, feedData.episodes);
+
+      // 设置响应头
+      reply.type('application/xml; charset=utf-8');
+      reply.send(xml);
+    } catch (error: any) {
+      if (error.message?.includes('播客不存在')) {
+        return reply.code(404).send({ error: '播客不存在' });
+      }
+      throw error;
     }
-
-    // 从数据库读取剧集列表
-    const episodesList = await db.select().from(episodes).where(eq(episodes.podcastId, podcastId)).all();
-
-    // 生成 RSS XML
-    const xml = generateRssFeed(podcast, episodesList);
-
-    // 设置响应头
-    reply.type('application/xml; charset=utf-8');
-    reply.send(xml);
   });
 }
+
 

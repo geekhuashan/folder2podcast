@@ -1,13 +1,13 @@
 /**
- * 文件管理器 - 主从布局版本
+ * 文件管理器 - 列表布局版本
  *
  * 架构：
- * - 左侧（40%）：文件列表，支持选中
- * - 右侧（60%）：剧集详情面板，显示选中文件的详细信息和编辑表单
+ * - 文件列表视图：显示所有音频文件
+ * - 点击文件打开编辑模态框
  *
  * 特性：
- * - 移除所有模态框，采用行内编辑
- * - 点击文件即可在右侧面板查看和编辑
+ * - 列表形式展示所有文件
+ * - 弹窗方式编辑剧集元数据
  * - 自动保存（防抖 1 秒）
  * - 响应式设计
  */
@@ -15,7 +15,7 @@
 import { createSignal, createResource, For, Show, createMemo } from 'solid-js';
 import { podcastsAPI, episodesAPI } from '../utils/api';
 import ConfigEditor from './ConfigEditor';
-import EpisodeDetailsPanel from './EpisodeDetailsPanel';
+import EpisodeEditorModal from './EpisodeEditorModal';
 import { useToast } from './Toast';
 import { useModal } from '../contexts/ModalContext';
 import {
@@ -25,6 +25,7 @@ import {
   markTaskFailed,
   uploadState
 } from '../utils/uploadManager';
+import { getAudioUrl, getFullFeedUrl } from '../utils/url';
 
 // 复制到剪贴板功能
 const copyToClipboard = async (text) => {
@@ -54,6 +55,7 @@ export default function FileManager(props) {
 
   // 界面状态
   const [showConfigEditor, setShowConfigEditor] = createSignal(false);
+  const [showEpisodeEditor, setShowEpisodeEditor] = createSignal(false);
   const [selectedFileName, setSelectedFileName] = createSignal(null);
   const [rssCopied, setRssCopied] = createSignal(false);
 
@@ -85,12 +87,14 @@ export default function FileManager(props) {
   const selectedAudioUrl = createMemo(() => {
     const fileName = selectedFileName();
     if (!fileName) return null;
-    return `/audio/${encodeURIComponent(props.podcast.dirName)}/${encodeURIComponent(fileName)}`;
+    // ✅ 使用统一的 URL 生成函数
+    return getAudioUrl(props.podcast.dirName, fileName);
   });
 
   // 复制 RSS 链接
   const handleCopyRSS = async () => {
-    const rssUrl = `${window.location.origin}/feeds/${encodeURIComponent(props.podcast.id)}.xml`;
+    // ✅ 使用统一的 URL 生成函数
+    const rssUrl = getFullFeedUrl(props.podcast.id);
     const success = await copyToClipboard(rssUrl);
     if (success) {
       setRssCopied(true);
@@ -174,9 +178,16 @@ export default function FileManager(props) {
     refetch();
   };
 
-  // 选中文件
+  // 选中文件并打开编辑器
   const handleSelectFile = (fileName) => {
     setSelectedFileName(fileName);
+    setShowEpisodeEditor(true);
+  };
+
+  // 关闭编辑器
+  const handleCloseEditor = () => {
+    setShowEpisodeEditor(false);
+    setSelectedFileName(null);
   };
 
   return (
@@ -230,7 +241,7 @@ export default function FileManager(props) {
         </p>
       </div>
 
-      {/* 主从布局 */}
+      {/* 文件列表 */}
       <Show
         when={!files.loading}
         fallback={<div class="flex items-center gap-2"><div class="spinner"></div> 加载文件中...</div>}
@@ -241,60 +252,89 @@ export default function FileManager(props) {
             <p class="text-sm">支持拖入 MP3/M4A/FLAC 等常见格式，上传后自动生成 RSS。</p>
           </div>
         }>
-          <div class="file-manager-layout">
-            {/* 左侧：文件列表 */}
-            <div class="file-manager-list">
-              <div class="section-header" style={{ 'margin-bottom': '1rem' }}>
-                <div>
-                  <h3 style={{ margin: 0 }}>🎵 音频文件</h3>
-                  <p class="text-muted">{audioFiles().length || 0} 个文件</p>
-                </div>
-              </div>
-
-              <div class="file-list-container">
-                <For each={audioFiles()}>
-                  {(fileName) => (
-                    <div
-                      class={`file-list-item ${selectedFileName() === fileName ? 'selected' : ''}`}
-                      onClick={() => handleSelectFile(fileName)}
-                    >
-                      <div class="file-list-item__icon">🎵</div>
-                      <div class="file-list-item__content">
-                        <div class="file-list-item__name">{fileName}</div>
-                      </div>
-                      <Show when={selectedFileName() === fileName}>
-                        <div class="file-list-item__indicator">→</div>
-                      </Show>
-                    </div>
-                  )}
-                </For>
+          <div class="section-card">
+            <div class="section-header" style={{ 'margin-bottom': '1rem' }}>
+              <div>
+                <p class="eyebrow">音频文件</p>
+                <h3 style={{ margin: 0 }}>文件列表</h3>
+                <p class="text-muted">{audioFiles().length || 0} 个文件</p>
               </div>
             </div>
 
-            {/* 右侧：详情面板 */}
-            <div class="file-manager-details">
-              <Show
-                when={selectedFileName()}
-                fallback={
-                  <div class="empty-state" style={{ height: '100%', display: 'flex', 'flex-direction': 'column', 'justify-content': 'center' }}>
-                    <p style={{ 'font-size': '2rem', margin: '0 0 1rem' }}>👈</p>
-                    <p>选择左侧文件以查看详情</p>
-                    <p class="text-sm">点击文件名即可查看和编辑剧集信息</p>
-                  </div>
-                }
-              >
-                <EpisodeDetailsPanel
-                  episode={selectedEpisode()}
-                  podcastDir={props.podcast.id}
-                  audioUrl={selectedAudioUrl()}
-                  onSave={handleEpisodeSave}
-                  onDelete={handleDelete}
-                />
-              </Show>
+            {/* 表格样式的文件列表 */}
+            <div class="file-table">
+              <div class="file-table-header">
+                <div class="file-table-cell" style={{ flex: '0 0 50px' }}>类型</div>
+                <div class="file-table-cell" style={{ flex: '1', 'min-width': '200px' }}>文件名</div>
+                <div class="file-table-cell" style={{ flex: '0 0 80px', 'text-align': 'center' }}>标题</div>
+                <div class="file-table-cell" style={{ flex: '0 0 80px', 'text-align': 'center' }}>描述</div>
+                <div class="file-table-cell" style={{ flex: '0 0 80px', 'text-align': 'center' }}>封面</div>
+                <div class="file-table-cell" style={{ flex: '0 0 100px', 'text-align': 'center' }}>发布时间</div>
+                <div class="file-table-cell" style={{ flex: '0 0 100px', 'text-align': 'center' }}>操作</div>
+              </div>
+              <For each={audioFiles()}>
+                {(fileName) => {
+                  const episode = episodes()?.data?.find(ep => ep.fileName === fileName);
+                  const hasCover = !!episode?.imageUrl;
+                  const hasCustomTitle = !!episode?.metadata?.title;
+                  const hasDescription = !!episode?.metadata?.description;
+                  const hasCustomDate = !!episode?.metadata?.pubDate;
+
+                  return (
+                    <div class="file-table-row">
+                      <div class="file-table-cell" style={{ flex: '0 0 50px' }}>
+                        <div style={{ 'font-size': '1.5rem' }}>🎵</div>
+                      </div>
+                      <div class="file-table-cell" style={{ flex: '1', 'min-width': '200px' }}>
+                        <div class="file-name" title={fileName}>{fileName}</div>
+                      </div>
+                      <div class="file-table-cell" style={{ flex: '0 0 80px', 'text-align': 'center' }}>
+                        <span class={`field-status ${hasCustomTitle ? 'field-status--yes' : 'field-status--no'}`}>
+                          {hasCustomTitle ? '✓' : '-'}
+                        </span>
+                      </div>
+                      <div class="file-table-cell" style={{ flex: '0 0 80px', 'text-align': 'center' }}>
+                        <span class={`field-status ${hasDescription ? 'field-status--yes' : 'field-status--no'}`}>
+                          {hasDescription ? '✓' : '-'}
+                        </span>
+                      </div>
+                      <div class="file-table-cell" style={{ flex: '0 0 80px', 'text-align': 'center' }}>
+                        <span class={`field-status ${hasCover ? 'field-status--yes' : 'field-status--no'}`}>
+                          {hasCover ? '✓' : '-'}
+                        </span>
+                      </div>
+                      <div class="file-table-cell" style={{ flex: '0 0 100px', 'text-align': 'center' }}>
+                        <span class={`field-status ${hasCustomDate ? 'field-status--yes' : 'field-status--no'}`}>
+                          {hasCustomDate ? '✓' : '-'}
+                        </span>
+                      </div>
+                      <div class="file-table-cell" style={{ flex: '0 0 100px', 'text-align': 'center' }}>
+                        <button
+                          class="btn btn-sm btn-primary"
+                          onClick={() => handleSelectFile(fileName)}
+                        >
+                          ✏️ 编辑
+                        </button>
+                      </div>
+                    </div>
+                  );
+                }}
+              </For>
             </div>
           </div>
         </Show>
       </Show>
+
+      {/* 剧集编辑模态框 */}
+      <EpisodeEditorModal
+        show={showEpisodeEditor()}
+        episode={selectedEpisode()}
+        podcastDir={props.podcast.id}
+        audioUrl={selectedAudioUrl()}
+        onSave={handleEpisodeSave}
+        onDelete={handleDelete}
+        onClose={handleCloseEditor}
+      />
 
       {/* 配置编辑器（仍然使用模态框） */}
       <Show when={showConfigEditor()}>

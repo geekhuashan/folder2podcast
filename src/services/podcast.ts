@@ -15,6 +15,7 @@ import { podcasts, episodes as episodesTable } from '../db/schema';
 import { eq, and } from 'drizzle-orm';
 import { createEpisode, validateFileName, parseEpisodeNumber } from '../utils/episode';
 import { getEnvConfig } from '../utils/env';
+import { EpisodeMetadata, EpisodesConfig } from '../types';
 
 const AUDIO_DIR = getEnvConfig().AUDIO_DIR;
 
@@ -174,16 +175,33 @@ export async function scanPodcastEpisodes(podcastId: string) {
 
   const podcastPath = path.join(AUDIO_DIR, podcast.userId, podcast.dirName);
 
+  // 📖 读取 episodes.json 配置文件（如果存在）
+  const episodesJsonPath = path.join(podcastPath, 'episodes.json');
+  let episodesMetadata: Record<string, EpisodeMetadata> = {};
+
+  if (await fs.pathExists(episodesJsonPath)) {
+    try {
+      const content = await fs.readFile(episodesJsonPath, 'utf-8');
+      const config = JSON.parse(content) as EpisodesConfig;
+      episodesMetadata = config.episodes || {};
+      console.log(`[scanPodcastEpisodes] 读取 episodes.json，找到 ${Object.keys(episodesMetadata).length} 个剧集元数据`);
+    } catch (error) {
+      console.warn(`[scanPodcastEpisodes] 读取 episodes.json 失败:`, error);
+    }
+  }
+
   // 扫描音频文件
   const audioFiles = await scanAudioFiles(podcastPath);
 
-  // 解析剧集信息
-  const episodesList = audioFiles.map((file) =>
-    parseEpisodeInfo(file, podcastPath, {
-      titleFormat: podcast.titleFormat || 'clean',
-      episodeNumberStrategy: podcast.episodeNumberStrategy || 'prefix',
-      useMTime: podcast.useMTime || false,
-    })
+  // 解析剧集信息（传入 episodes.json 中的元数据）
+  const episodesList = await Promise.all(
+    audioFiles.map((file) =>
+      parseEpisodeInfo(file, podcastPath, {
+        titleFormat: podcast.titleFormat || 'clean',
+        episodeNumberStrategy: podcast.episodeNumberStrategy || 'prefix',
+        useMTime: podcast.useMTime || false,
+      }, episodesMetadata[file.fileName]) // ✅ 传递 episodes.json 中的元数据
+    )
   );
 
   // 同步到数据库（保留用户自定义元数据）
@@ -200,11 +218,11 @@ export async function scanPodcastEpisodes(podcastId: string) {
         id: episodeId,
         podcastId,
         fileName: ep.fileName,
-        // 使用数据库中的自定义元数据，如果没有则用文件信息
+        // 使用数据库中的自定义元数据，如果没有则用文件信息（文件信息现在包含 episodes.json 的数据）
         title: existing?.title || ep.title,
-        description: existing?.description,
+        description: existing?.description || ep.description, // ✅ 现在 ep.description 来自 episodes.json
         pubDate: existing?.pubDate || ep.pubDate,
-        coverUrl: existing?.coverUrl || ep.coverUrl,
+        coverUrl: existing?.coverUrl || ep.coverUrl, // ✅ 现在 ep.coverUrl 来自 episodes.json
         // 文件信息始终更新为最新值
         duration: ep.duration,
         fileSize: ep.fileSize,
@@ -212,9 +230,15 @@ export async function scanPodcastEpisodes(podcastId: string) {
       .onConflictDoUpdate({
         target: episodesTable.id,
         set: {
-          // 只更新文件信息，保留用户自定义的元数据
+          // ✅ 更新文件信息（文件大小、时长）
           duration: ep.duration,
           fileSize: ep.fileSize,
+          // ✅ 更新 episodes.json 中的元数据（如果有的话）
+          // 注意：只有当 episodes.json 中有值时才更新,否则保留数据库中的原值
+          ...(ep.title && { title: ep.title }),
+          ...(ep.description && { description: ep.description }),
+          ...(ep.pubDate && { pubDate: ep.pubDate }),
+          ...(ep.coverUrl && { coverUrl: ep.coverUrl }),
           updatedAt: new Date(),
         },
       });
@@ -285,16 +309,20 @@ async function scanAudioFiles(dirPath: string): Promise<Array<{ fileName: string
  * @param file - 文件信息
  * @param dirPath - 目录路径
  * @param config - 播客配置
+ * @param metadata - episodes.json 中的元数据（可选）
  * @returns 剧集信息对象
  *
  * 说明：
  * - 使用 createEpisode 工具函数提取基本信息
- * - 返回文件的元数据（文件名、大小、时长等）
+ * - 如果提供了 metadata，则优先使用其中的字段
+ * - 自动检测文件系统中的封面文件
+ * - 返回文件的元数据（文件名、大小、时长、封面等）
  */
-function parseEpisodeInfo(
+async function parseEpisodeInfo(
   file: { fileName: string; stat: any },
   dirPath: string,
-  config: { titleFormat: string; episodeNumberStrategy: string; useMTime: boolean }
+  config: { titleFormat: string; episodeNumberStrategy: string; useMTime: boolean },
+  metadata?: EpisodeMetadata // ✅ 添加可选的 metadata 参数
 ) {
   const episodeConfig = {
     episodeNumberStrategy: config.episodeNumberStrategy,
@@ -304,13 +332,26 @@ function parseEpisodeInfo(
   // 使用现有的 createEpisode 函数（纯函数），传递正确的目录路径
   const episode = createEpisode(file.fileName, dirPath, episodeConfig);
 
+  // ✅ 自动检测封面文件
+  let coverUrl = metadata?.image; // 优先使用 episodes.json 中的 image
+  if (!coverUrl) {
+    // 如果没有配置，尝试自动检测文件系统中的封面
+    const { detectEpisodeCover } = await import('../utils/file.utils');
+    coverUrl = await detectEpisodeCover(file.fileName, dirPath) || undefined;
+  }
+
   return {
     fileName: file.fileName,
-    title: episode.title,
-    pubDate: episode.pubDate,
+    // ✅ 优先使用 episodes.json 中的 title，否则使用从文件名提取的 title
+    title: metadata?.title || episode.title,
+    // ✅ 使用 episodes.json 中的 description
+    description: metadata?.description,
+    // ✅ 优先使用 episodes.json 中的 pubDate，否则使用生成的 pubDate
+    pubDate: metadata?.pubDate ? new Date(metadata.pubDate) : episode.pubDate,
     duration: undefined, // 音频时长需要专门解析，这里暂时设为 undefined
     fileSize: file.stat.size,
-    coverUrl: undefined, // 剧集封面稍后处理
+    // ✅ 封面：优先使用 episodes.json，其次自动检测
+    coverUrl,
   };
 }
 

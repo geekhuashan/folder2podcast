@@ -23,6 +23,7 @@ import { registerEpisodesRoutes } from './routes/episodes.routes';
 import { registerFeedRoutes } from './routes/feed.routes';
 import { registerBilibiliRoutes } from './routes/bilibili.routes';
 import { registerFileManagementRoutes } from './routes/file-management.routes';
+import { registerAudioRoutes } from './routes/audio.routes';
 
 export class PodcastServer {
   private server: FastifyInstance;
@@ -89,17 +90,13 @@ export class PodcastServer {
         decorateReply: false,
       });
 
-      // 音频文件服务
-      await this.server.register(fastifyStatic, {
-        root: this.audioDir,
-        prefix: '/audio/',
-        decorateReply: false,
-      });
-
       // ====== 注册路由 ======
 
       // 认证路由（登录/登出）
       await authRoutes(this.server);
+
+      // 音频文件访问路由（支持用户隔离）
+      await registerAudioRoutes(this.server);
 
       // 播客路由（CRUD）
       await registerPodcastsRoutes(this.server);

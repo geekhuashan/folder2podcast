@@ -7,7 +7,7 @@ import {
     DownloadOptions,
     DownloadResult,
     VideoInfo,
-    VideoPartInfo
+    AudioFile
 } from '../base/download-adapter.interface';
 import {
     getBBDownPath,
@@ -19,17 +19,18 @@ import {
     parsePublishDate,
     parseOwnerInfo,
     buildCoverDownloadArgs,
+    generateEpisodeDescription,
     VideoInfo as BBDownVideoInfo
 } from './bbdown.utils';
 
 /**
- * Bilibili 下载适配器
+ * Bilibili 下载适配器（重构版）
  *
- * 负责:
- * - 使用 BBDown 工具下载 B站视频
- * - 提取音频到临时目录
- * - 处理多分P视频
- * - 标准化文件名
+ * 核心改进：
+ * - download() 方法返回包含完整元数据的 AudioFile[]
+ * - 自动下载封面并填充到 AudioFile.coverPath
+ * - 自动提取标题、描述、发布时间等信息
+ * - 服务层无需额外处理，直接使用返回的数据
  */
 export class BilibiliAdapter extends BaseDownloadAdapter {
     readonly platform = DownloadPlatform.BILIBILI;
@@ -49,7 +50,9 @@ export class BilibiliAdapter extends BaseDownloadAdapter {
     }
 
     /**
-     * 获取视频信息（包括分P列表）
+     * 获取视频信息（可选方法，用于预览）
+     *
+     * 注意：download() 会自动获取视频信息，这个方法仅用于预览
      */
     async getVideoInfo(url: string): Promise<VideoInfo> {
         this.log(`获取视频信息: ${url}`);
@@ -84,7 +87,7 @@ export class BilibiliAdapter extends BaseDownloadAdapter {
             const publishDate = parsePublishDate(output);
             const ownerInfo = parseOwnerInfo(output);
 
-            // 转换为统一的 VideoInfo 格式，包含额外元数据
+            // 转换为统一的 VideoInfo 格式
             return this.convertToVideoInfo(bbdownVideoInfo, publishDate, ownerInfo);
         } catch (error) {
             this.log(`获取视频信息失败: ${error}`, 'error');
@@ -93,10 +96,16 @@ export class BilibiliAdapter extends BaseDownloadAdapter {
     }
 
     /**
-     * 下载视频/音频到指定目录
+     * 下载音频并返回完整的文件信息（核心方法）
+     *
+     * 流程：
+     * 1. 获取视频信息（标题、分P列表、发布时间等）
+     * 2. 下载音频文件到临时目录
+     * 3. 为每个音频文件下载封面
+     * 4. 构建包含完整元数据的 AudioFile[]
      */
     async download(options: DownloadOptions): Promise<DownloadResult> {
-        const { url, outputDir, fileNamePattern, selectedParts, audioOnly = true } = options;
+        const { url, outputDir, fileNamePattern, selectedParts } = options;
 
         this.log(`开始下载: ${url}`);
         this.log(`输出目录: ${outputDir}`);
@@ -105,8 +114,7 @@ export class BilibiliAdapter extends BaseDownloadAdapter {
         if (!this.isValidUrl(url)) {
             return {
                 success: false,
-                filePaths: [],
-                videoInfo: this.createEmptyVideoInfo(),
+                audioFiles: [],
                 error: `无效的 B站视频链接: ${url}`
             };
         }
@@ -116,8 +124,7 @@ export class BilibiliAdapter extends BaseDownloadAdapter {
         if (!videoId) {
             return {
                 success: false,
-                filePaths: [],
-                videoInfo: this.createEmptyVideoInfo(),
+                audioFiles: [],
                 error: `无法提取视频 ID: ${url}`
             };
         }
@@ -126,10 +133,14 @@ export class BilibiliAdapter extends BaseDownloadAdapter {
             // 确保输出目录存在
             await fs.ensureDir(outputDir);
 
-            // 获取视频信息
+            // 1. 获取视频信息（包含标题、分P列表、发布时间等）
+            this.log('获取视频信息...');
             const videoInfo = await this.getVideoInfo(url);
+            this.log(`视频标题: ${videoInfo.title}`);
+            this.log(`分P数量: ${videoInfo.parts.length}`);
 
-            // 构建 BBDown 参数
+            // 2. 下载音频文件
+            this.log('下载音频文件...');
             const bbdownPath = getBBDownPath();
 
             // 确定文件命名模板
@@ -159,32 +170,38 @@ export class BilibiliAdapter extends BaseDownloadAdapter {
             // 执行下载
             await this.executeBBDown(bbdownPath, args);
 
-            // 查找下载的文件
-            const filePaths = await this.findDownloadedFiles(outputDir);
+            // 3. 查找下载的音频文件
+            const audioFilePaths = await this.findDownloadedFiles(outputDir);
 
-            if (filePaths.length === 0) {
+            if (audioFilePaths.length === 0) {
                 return {
                     success: false,
-                    filePaths: [],
-                    videoInfo,
+                    audioFiles: [],
                     error: '下载完成，但未找到任何音频文件'
                 };
             }
 
-            this.log(`下载成功，共 ${filePaths.length} 个文件`);
+            this.log(`找到 ${audioFilePaths.length} 个音频文件`);
+
+            // 4. 为每个音频文件构建完整的元数据
+            const audioFiles: AudioFile[] = await Promise.all(
+                audioFilePaths.map((filePath, index) =>
+                    this.buildAudioFileInfo(filePath, index, videoInfo, outputDir, url)
+                )
+            );
+
+            this.log(`下载成功，共 ${audioFiles.length} 个文件`);
 
             return {
                 success: true,
-                filePaths,
-                videoInfo
+                audioFiles
             };
 
         } catch (error) {
             this.log(`下载失败: ${error}`, 'error');
             return {
                 success: false,
-                filePaths: [],
-                videoInfo: this.createEmptyVideoInfo(),
+                audioFiles: [],
                 error: error instanceof Error ? error.message : String(error)
             };
         }
@@ -217,6 +234,146 @@ export class BilibiliAdapter extends BaseDownloadAdapter {
         } catch (error) {
             this.log(`BBDown 工具不可用: ${error}`, 'warn');
             return false;
+        }
+    }
+
+    /**
+     * 为单个音频文件构建完整的元数据信息
+     *
+     * @param filePath - 音频文件路径
+     * @param index - 文件索引（在下载列表中的位置）
+     * @param videoInfo - 视频信息
+     * @param outputDir - 输出目录
+     * @param originalUrl - 原始视频URL
+     * @returns Promise<AudioFile>
+     */
+    private async buildAudioFileInfo(
+        filePath: string,
+        index: number,
+        videoInfo: VideoInfo,
+        outputDir: string,
+        originalUrl: string
+    ): Promise<AudioFile> {
+        const fileName = path.basename(filePath);
+        const fileNameWithoutExt = path.parse(fileName).name;
+
+        // 找到对应的分P信息（如果有）
+        const partInfo = videoInfo.parts[index];
+
+        // 🔥 关键：下载封面
+        let coverPath: string | undefined;
+        try {
+            this.log(`为 ${fileName} 下载封面...`);
+            const coverFileName = fileNameWithoutExt;
+            const downloadedCoverPath = await this.downloadCoverForEpisode(
+                originalUrl,
+                outputDir,
+                coverFileName
+            );
+            if (downloadedCoverPath) {
+                coverPath = downloadedCoverPath;
+                this.log(`封面下载成功: ${path.basename(coverPath)}`);
+            }
+        } catch (error) {
+            this.log(`封面下载失败: ${error}`, 'warn');
+            // 封面下载失败不影响整体流程
+        }
+
+        // 🔥 关键：生成描述（包含BV号、UP主ID、发布日期）
+        const description = generateEpisodeDescription(videoInfo);
+
+        // 构建 AudioFile 对象
+        const audioFile: AudioFile = {
+            filePath,
+            fileName,
+            // ✅ 标题：优先使用分P标题，否则使用视频标题
+            title: partInfo?.title || videoInfo.title,
+            // ✅ 描述：自动生成的元数据描述
+            description,
+            // ✅ 封面：下载的封面路径
+            coverPath,
+            // ✅ 发布时间：从视频信息中获取
+            publishDate: videoInfo.publishDate,
+            // ✅ 时长：从分P信息中获取
+            duration: partInfo?.duration,
+            // ✅ 作者：UP主昵称或ID
+            author: videoInfo.ownerName || (videoInfo.ownerMid ? `UP主 ${videoInfo.ownerMid}` : undefined),
+            // ✅ 视频ID：BV号
+            videoId: videoInfo.id,
+            // ✅ 分P索引：分P的序号
+            partIndex: partInfo?.index
+        };
+
+        return audioFile;
+    }
+
+    /**
+     * 下载单个剧集的封面
+     *
+     * @param url - 视频URL或ID
+     * @param outputDir - 输出目录
+     * @param fileName - 文件名（不含扩展名）
+     * @returns Promise<封面文件路径>，失败返回 null
+     */
+    private async downloadCoverForEpisode(
+        url: string,
+        outputDir: string,
+        fileName: string
+    ): Promise<string | null> {
+        // 验证 URL
+        if (!this.isValidUrl(url)) {
+            this.log(`无效的 B站视频链接: ${url}`, 'error');
+            return null;
+        }
+
+        // 提取视频 ID
+        const videoId = this.extractVideoId(url);
+        if (!videoId) {
+            this.log(`无法提取视频 ID: ${url}`, 'error');
+            return null;
+        }
+
+        // 创建临时目录（避免 BBDown 在播客目录下创建子目录）
+        const tempDir = path.join(outputDir, '.cover_temp_' + Date.now());
+
+        try {
+            // 确保临时目录存在
+            await fs.ensureDir(tempDir);
+
+            // 构建封面下载参数（使用临时目录）
+            const bbdownPath = getBBDownPath();
+            const args = buildCoverDownloadArgs(videoId, tempDir, fileName);
+
+            // 执行下载
+            await this.executeBBDown(bbdownPath, args);
+
+            // 递归查找下载的封面文件（BBDown 可能创建了子目录）
+            const coverFiles = await this.findCoverFiles(tempDir);
+
+            if (coverFiles.length === 0) {
+                this.log('封面下载完成，但未找到封面文件', 'warn');
+                return null;
+            }
+
+            // 移动第一个封面文件到目标目录
+            const sourceCover = coverFiles[0];
+            const ext = path.extname(sourceCover);
+            const targetCover = path.join(outputDir, `${fileName}${ext}`);
+
+            await fs.move(sourceCover, targetCover, { overwrite: true });
+
+            return targetCover;
+
+        } catch (error) {
+            this.log(`封面下载失败: ${error}`, 'error');
+            return null;
+        } finally {
+            // 清理临时目录
+            try {
+                await fs.remove(tempDir);
+            } catch (cleanupError) {
+                this.log(`清理临时目录失败: ${cleanupError}`, 'warn');
+            }
         }
     }
 
@@ -284,6 +441,10 @@ export class BilibiliAdapter extends BaseDownloadAdapter {
                 const fullPath = path.join(currentDir, entry.name);
 
                 if (entry.isDirectory()) {
+                    // 跳过临时封面目录
+                    if (entry.name.startsWith('.cover_temp_')) {
+                        continue;
+                    }
                     // 递归查找子目录
                     await findRecursive(fullPath, depth + 1);
                 } else if (entry.isFile()) {
@@ -301,129 +462,6 @@ export class BilibiliAdapter extends BaseDownloadAdapter {
 
         await findRecursive(outputDir, 0);
         return files;
-    }
-
-    /**
-     * 转换 BBDown 视频信息为统一格式，包含额外元数据
-     */
-    private convertToVideoInfo(
-        bbdownInfo: BBDownVideoInfo,
-        publishDate?: string | null,
-        ownerInfo?: { name?: string; mid?: string }
-    ): VideoInfo {
-        const parts: VideoPartInfo[] = bbdownInfo.pages.map(page => ({
-            index: page.index,
-            title: page.title,
-            duration: page.duration,
-            id: `P${page.index}`
-        }));
-
-        return {
-            id: bbdownInfo.bvid,
-            title: bbdownInfo.title,
-            author: bbdownInfo.author,
-            duration: undefined,
-            isMultiPart: bbdownInfo.isMultiPage,
-            parts,
-            thumbnail: undefined,
-            platform: DownloadPlatform.BILIBILI,
-
-            // 添加额外元数据
-            publishDate: publishDate || undefined,
-            ownerName: ownerInfo?.name,
-            ownerMid: ownerInfo?.mid
-        };
-    }
-
-    /**
-     * 创建空的视频信息对象（用于错误返回）
-     */
-    private createEmptyVideoInfo(): VideoInfo {
-        return {
-            id: '',
-            title: '',
-            author: undefined,
-            duration: undefined,
-            isMultiPart: false,
-            parts: [],
-            thumbnail: undefined,
-            platform: DownloadPlatform.BILIBILI
-        };
-    }
-
-    /**
-     * 下载视频封面
-     *
-     * @param url - 视频URL或ID
-     * @param outputDir - 输出目录（绝对路径）
-     * @param fileName - 文件名（不含扩展名）
-     * @returns Promise<封面文件路径>，失败返回 null
-     */
-    async downloadCover(
-        url: string,
-        outputDir: string,
-        fileName: string
-    ): Promise<string | null> {
-        this.log(`下载封面: ${url} -> ${fileName}.jpg`);
-
-        // 验证 URL
-        if (!this.isValidUrl(url)) {
-            this.log(`无效的 B站视频链接: ${url}`, 'error');
-            return null;
-        }
-
-        // 提取视频 ID
-        const videoId = this.extractVideoId(url);
-        if (!videoId) {
-            this.log(`无法提取视频 ID: ${url}`, 'error');
-            return null;
-        }
-
-        // 创建临时目录（避免 BBDown 在播客目录下创建子目录）
-        const tempDir = path.join(outputDir, '.cover_temp_' + Date.now());
-
-        try {
-            // 确保临时目录存在
-            await fs.ensureDir(tempDir);
-
-            // 构建封面下载参数（使用临时目录）
-            const bbdownPath = getBBDownPath();
-            const args = buildCoverDownloadArgs(videoId, tempDir, fileName);
-
-            this.log(`执行命令: ${bbdownPath} ${args.join(' ')}`);
-
-            // 执行下载
-            await this.executeBBDown(bbdownPath, args);
-
-            // 递归查找下载的封面文件（BBDown 可能创建了子目录）
-            const coverFiles = await this.findCoverFiles(tempDir);
-
-            if (coverFiles.length === 0) {
-                this.log('封面下载完成，但未找到封面文件', 'warn');
-                return null;
-            }
-
-            // 移动第一个封面文件到目标目录
-            const sourceCover = coverFiles[0];
-            const ext = path.extname(sourceCover);
-            const targetCover = path.join(outputDir, `${fileName}${ext}`);
-
-            await fs.move(sourceCover, targetCover, { overwrite: true });
-            this.log(`封面下载成功: ${targetCover}`);
-
-            return targetCover;
-
-        } catch (error) {
-            this.log(`封面下载失败: ${error}`, 'error');
-            return null;
-        } finally {
-            // 清理临时目录
-            try {
-                await fs.remove(tempDir);
-            } catch (cleanupError) {
-                this.log(`清理临时目录失败: ${cleanupError}`, 'warn');
-            }
-        }
     }
 
     /**
@@ -460,5 +498,35 @@ export class BilibiliAdapter extends BaseDownloadAdapter {
 
         await search(dir);
         return files;
+    }
+
+    /**
+     * 转换 BBDown 视频信息为统一格式，包含额外元数据
+     */
+    private convertToVideoInfo(
+        bbdownInfo: BBDownVideoInfo,
+        publishDate?: string | null,
+        ownerInfo?: { name?: string; mid?: string }
+    ): VideoInfo {
+        return {
+            id: bbdownInfo.bvid,
+            title: bbdownInfo.title,
+            author: bbdownInfo.author,
+            duration: undefined,
+            isMultiPart: bbdownInfo.isMultiPage,
+            parts: bbdownInfo.pages.map(page => ({
+                index: page.index,
+                title: page.title,
+                duration: page.duration,
+                id: `P${page.index}`
+            })),
+            thumbnail: undefined,
+            platform: DownloadPlatform.BILIBILI,
+
+            // 添加额外元数据
+            publishDate: publishDate || undefined,
+            ownerName: ownerInfo?.name,
+            ownerMid: ownerInfo?.mid
+        };
     }
 }

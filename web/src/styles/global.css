@@ -1798,3 +1798,215 @@ select:focus {
   }
 }
 
+/* ========================================
+   文件表格列表样式（新布局）
+   ======================================== */
+
+/**
+ * 表格样式文件列表
+ * - 用于文件管理器的列表布局
+ * - 支持行点击、悬停效果
+ */
+
+.file-table {
+  display: flex;
+  flex-direction: column;
+}
+
+.file-table-header {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: var(--surface-soft);
+  border-bottom: 2px solid var(--border);
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.file-table-row {
+  display: flex;
+  align-items: center;
+  padding: 1rem;
+  border-bottom: 1px solid var(--border);
+  transition: all 0.2s ease;
+}
+
+.file-table-row:last-child {
+  border-bottom: none;
+}
+
+.file-table-row:hover {
+  background: var(--surface-soft);
+}
+
+.file-table-cell {
+  display: flex;
+  align-items: center;
+  padding: 0 0.5rem;
+}
+
+.file-name {
+  font-weight: 500;
+  font-size: 0.9375rem;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: 'SFMono-Regular', 'JetBrains Mono', monospace;
+}
+
+.file-title {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-meta-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  padding: 0.2rem 0.5rem;
+  margin-top: 0.25rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+/* 字段状态指示器 */
+.field-status {
+  display: inline-block;
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.field-status--yes {
+  color: #059669;
+}
+
+.field-status--no {
+  color: #d1d5db;
+}
+
+/* 状态徽章 */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.7rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.status-badge--success {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.status-badge--info {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.status-badge--warning {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-badge--muted {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+/* 模态框样式改进 */
+.modal-content {
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-body {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.modal-footer {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--border);
+  background: var(--surface-soft);
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .file-table-header {
+    display: none;
+  }
+
+  .file-table-row {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 1rem;
+    gap: 0.75rem;
+  }
+
+  .file-table-cell {
+    width: 100%;
+    padding: 0;
+    text-align: left !important;
+  }
+
+  .file-table-cell[style*="flex: 1"] {
+    order: 1;
+  }
+
+  /* 在移动端为每个字段添加标签 */
+  .file-table-row .file-table-cell:nth-child(3)::before {
+    content: '标题: ';
+    font-weight: 600;
+    margin-right: 0.5rem;
+  }
+
+  .file-table-row .file-table-cell:nth-child(4)::before {
+    content: '描述: ';
+    font-weight: 600;
+    margin-right: 0.5rem;
+  }
+
+  .file-table-row .file-table-cell:nth-child(5)::before {
+    content: '封面: ';
+    font-weight: 600;
+    margin-right: 0.5rem;
+  }
+
+  .file-table-row .file-table-cell:nth-child(6)::before {
+    content: '发布时间: ';
+    font-weight: 600;
+    margin-right: 0.5rem;
+  }
+
+  .modal-content {
+    max-width: 95% !important;
+    max-height: 95vh !important;
+  }
+}
+

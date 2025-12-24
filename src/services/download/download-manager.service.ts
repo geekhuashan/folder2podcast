@@ -1,8 +1,8 @@
 import path from 'path';
 import fs from 'fs-extra';
-import { IDownloadAdapter, DownloadResult } from '../../adapters/base/download-adapter.interface';
+import { IDownloadAdapter, AudioFile } from '../../adapters/base/download-adapter.interface';
 import { TempFileManager } from './temp-file-manager.service';
-import { EpisodeMetadataService } from '../episode-metadata.service';
+import { EpisodeMetadata } from '../../types';
 
 /**
  * 统一下载请求接口
@@ -34,20 +34,23 @@ export interface UnifiedDownloadResponse {
     filePaths: string[];
     /** 播客名称 */
     podcastName: string;
-    /** 视频信息 */
-    videoInfo?: any;
     /** 错误信息 */
     error?: string;
 }
 
 /**
- * 下载管理器服务
+ * 下载管理器服务（重构版）
  *
- * 职责：
+ * 职责简化：
  * - 协调适配器和临时文件管理器
  * - 实现统一的下载流程
  * - 处理文件从临时目录到播客目录的移动
- * - 自动创建播客目录
+ * - 保存适配器提供的元数据到 episodes.json
+ *
+ * 移除的职责：
+ * - 不再下载封面（适配器已经下载）
+ * - 不再提取元数据（适配器已经提取）
+ * - 不再调用 EpisodeMetadataService（直接保存）
  */
 export class DownloadManager {
     private readonly audioDir: string;
@@ -59,13 +62,14 @@ export class DownloadManager {
     }
 
     /**
-     * 统一下载接口
+     * 统一下载接口（重构版）
      *
-     * 流程：
+     * 流程简化：
      * 1. 创建任务临时目录
-     * 2. 调用适配器下载到临时目录
-     * 3. 移动文件到播客目录
-     * 4. 清理临时目录
+     * 2. 调用适配器下载到临时目录（适配器返回完整的 AudioFile[]）
+     * 3. 移动音频文件和封面到播客目录
+     * 4. 保存元数据到 episodes.json
+     * 5. 清理临时目录
      *
      * @param adapter - 下载适配器
      * @param request - 下载请求
@@ -75,7 +79,7 @@ export class DownloadManager {
         adapter: IDownloadAdapter,
         request: UnifiedDownloadRequest
     ): Promise<UnifiedDownloadResponse> {
-        const { url, podcastName, userId, episodeTitle, fileNamePattern, selectedParts, quality } = request;
+        const { url, podcastName, userId, episodeTitle, fileNamePattern, selectedParts } = request;
 
         // 1. 创建任务临时目录
         const { taskId, tempDir } = await this.tempFileManager.createTaskTempDir();
@@ -85,13 +89,12 @@ export class DownloadManager {
             // 2. 调用适配器下载到临时目录
             console.log(`[DownloadManager] 使用 ${adapter.platform} 适配器下载...`);
 
-            const downloadResult: DownloadResult = await adapter.download({
+            const downloadResult = await adapter.download({
                 url,
                 outputDir: tempDir,
                 fileNamePattern: fileNamePattern || episodeTitle,
                 selectedParts,
-                audioOnly: true,
-                quality
+                quality: undefined
             });
 
             // 检查下载是否成功
@@ -99,62 +102,78 @@ export class DownloadManager {
                 throw new Error(downloadResult.error || '下载失败');
             }
 
-            if (downloadResult.filePaths.length === 0) {
+            if (downloadResult.audioFiles.length === 0) {
                 throw new Error('下载完成，但没有找到任何文件');
             }
 
-            console.log(`[DownloadManager] 下载完成，共 ${downloadResult.filePaths.length} 个文件`);
+            console.log(`[DownloadManager] 下载完成，共 ${downloadResult.audioFiles.length} 个文件`);
 
             // 3. 准备目标播客目录（包含用户隔离）
             const podcastDir = path.join(this.audioDir, userId, podcastName);
             await fs.ensureDir(podcastDir);
 
-            // 4. 移动文件到播客目录（扁平结构）
+            // 4. 移动文件到播客目录并保存元数据
             console.log(`[DownloadManager] 移动文件到播客目录: ${podcastName}`);
 
-            const movedFiles = await this.tempFileManager.moveFilesToTarget(
-                downloadResult.filePaths,
-                podcastDir
-            );
+            const movedFilePaths: string[] = [];
+            const episodesMetadata: Record<string, EpisodeMetadata> = {};
 
-            // 5. 清理临时目录
+            for (const audioFile of downloadResult.audioFiles) {
+                // 4.1 移动音频文件
+                const targetAudioPath = path.join(podcastDir, audioFile.fileName);
+                await fs.move(audioFile.filePath, targetAudioPath, { overwrite: true });
+                movedFilePaths.push(targetAudioPath);
+
+                // 4.2 移动封面文件（如果适配器下载了封面）
+                let coverFileName: string | undefined;
+                if (audioFile.coverPath) {
+                    coverFileName = path.basename(audioFile.coverPath);
+                    const targetCoverPath = path.join(podcastDir, coverFileName);
+                    await fs.move(audioFile.coverPath, targetCoverPath, { overwrite: true });
+                    console.log(`[DownloadManager] 封面已移动: ${coverFileName}`);
+                }
+
+                // 4.3 构建剧集元数据（直接使用适配器提供的数据）
+                const metadata: EpisodeMetadata = {
+                    title: audioFile.title,              // ✅ 适配器提供的标题
+                    description: audioFile.description,  // ✅ 适配器提供的描述
+                    image: coverFileName,                // ✅ 适配器下载的封面
+                    pubDate: audioFile.publishDate       // ✅ 适配器提供的发布时间
+                };
+
+                // 移除 undefined 字段
+                Object.keys(metadata).forEach(key => {
+                    if (metadata[key as keyof EpisodeMetadata] === undefined) {
+                        delete metadata[key as keyof EpisodeMetadata];
+                    }
+                });
+
+                // 只有包含有效数据时才保存
+                if (Object.keys(metadata).length > 0) {
+                    episodesMetadata[audioFile.fileName] = metadata;
+                }
+            }
+
+            // 5. 保存 episodes.json（一次性写入所有元数据）
+            if (Object.keys(episodesMetadata).length > 0) {
+                await this.saveEpisodesMetadata(podcastDir, episodesMetadata);
+                console.log(`[DownloadManager] 已保存 ${Object.keys(episodesMetadata).length} 个剧集的元数据`);
+            }
+
+            // 6. 清理临时目录
             await this.tempFileManager.cleanupTaskTempDir(taskId);
 
             console.log(`[DownloadManager] 任务 ${taskId} 完成`);
 
-            // 6. 补充剧集元数据（封面、描述等）
-            if (movedFiles.length > 0 && downloadResult.videoInfo) {
-                try {
-                    const metadataService = new EpisodeMetadataService();
-
-                    // 返回相对路径（相对于 audioDir）
-                    const relativeFilePaths = movedFiles.map(filePath =>
-                        path.relative(this.audioDir, filePath)
-                    );
-
-                    await metadataService.enrichEpisodeMetadata(
-                        podcastName,              // 播客目录名
-                        relativeFilePaths,        // 音频文件路径列表（相对路径）
-                        downloadResult.videoInfo, // 视频信息（包含元数据）
-                        adapter,                  // 适配器（用于下载封面）
-                        url                       // 原始视频URL
-                    );
-                } catch (error) {
-                    // 元数据保存失败不影响下载结果
-                    console.warn('[DownloadManager] 保存剧集元数据失败:', error);
-                }
-            }
-
             // 返回相对路径（相对于 audioDir）
-            const relativeFilePaths = movedFiles.map(filePath =>
+            const relativeFilePaths = movedFilePaths.map(filePath =>
                 path.relative(this.audioDir, filePath)
             );
 
             return {
                 success: true,
                 filePaths: relativeFilePaths,
-                podcastName,
-                videoInfo: downloadResult.videoInfo
+                podcastName
             };
 
         } catch (error) {
@@ -177,6 +196,44 @@ export class DownloadManager {
     }
 
     /**
+     * 保存剧集元数据到 episodes.json
+     *
+     * @param podcastDir - 播客目录
+     * @param newMetadata - 新的剧集元数据
+     */
+    private async saveEpisodesMetadata(
+        podcastDir: string,
+        newMetadata: Record<string, EpisodeMetadata>
+    ): Promise<void> {
+        const episodesJsonPath = path.join(podcastDir, 'episodes.json');
+
+        // 读取现有的 episodes.json（如果存在）
+        let existingConfig: { episodes: Record<string, EpisodeMetadata> } = { episodes: {} };
+
+        if (await fs.pathExists(episodesJsonPath)) {
+            try {
+                const content = await fs.readFile(episodesJsonPath, 'utf-8');
+                existingConfig = JSON.parse(content);
+            } catch (error) {
+                console.warn(`[DownloadManager] 读取 episodes.json 失败，将创建新文件:`, error);
+            }
+        }
+
+        // 合并新旧元数据
+        const mergedMetadata = {
+            ...existingConfig.episodes,
+            ...newMetadata
+        };
+
+        // 写入文件
+        const config = {
+            episodes: mergedMetadata
+        };
+
+        await fs.writeFile(episodesJsonPath, JSON.stringify(config, null, 2), 'utf-8');
+    }
+
+    /**
      * 获取视频信息（不下载）
      * 用于前端显示分P列表等信息
      *
@@ -185,6 +242,12 @@ export class DownloadManager {
      */
     async getVideoInfo(adapter: IDownloadAdapter, url: string) {
         console.log(`[DownloadManager] 获取视频信息: ${url}`);
+
+        // 检查适配器是否支持 getVideoInfo
+        if (!adapter.getVideoInfo) {
+            throw new Error(`适配器 ${adapter.platform} 不支持获取视频信息`);
+        }
+
         return await adapter.getVideoInfo(url);
     }
 

@@ -1,5 +1,85 @@
 /**
- * 视频分P/分集信息
+ * 平台枚举
+ */
+export enum DownloadPlatform {
+    BILIBILI = 'bilibili',
+    DOUYIN = 'douyin',
+    XIGUA = 'xigua',
+    YOUTUBE = 'youtube'
+}
+
+/**
+ * 下载选项
+ */
+export interface DownloadOptions {
+    /** 视频URL或ID */
+    url: string;
+    /** 输出目录（临时目录） */
+    outputDir: string;
+    /** 文件命名模板（可选） */
+    fileNamePattern?: string;
+    /** 选中的分P索引（可选，undefined表示全部） */
+    selectedParts?: number[];
+    /** 质量选项（可选） */
+    quality?: string;
+}
+
+/**
+ * 单个音频文件的完整信息
+ *
+ * 适配器能提供什么就填充什么，不能提供就留 undefined
+ * 服务层会直接使用这些数据，无需额外判断和转换
+ */
+export interface AudioFile {
+    /** 文件路径（必须） */
+    filePath: string;
+
+    /** 文件名（必须） */
+    fileName: string;
+
+    // ===== 以下字段可选，适配器尽力填充 =====
+
+    /** 剧集标题（如果适配器能提取） */
+    title?: string;
+
+    /** 剧集描述（如果适配器能提取） */
+    description?: string;
+
+    /** 封面文件路径（如果适配器下载了封面） */
+    coverPath?: string;
+
+    /** 发布时间（ISO 8601 格式，如果适配器能获取） */
+    publishDate?: string;
+
+    /** 时长（秒，如果适配器能获取） */
+    duration?: number;
+
+    /** 作者/UP主（如果适配器能获取） */
+    author?: string;
+
+    /** 视频ID（用于生成描述等） */
+    videoId?: string;
+
+    /** 分P索引（多P视频时，从1开始） */
+    partIndex?: number;
+}
+
+/**
+ * 下载结果 - 包含所有适配器能提供的信息
+ */
+export interface DownloadResult {
+    /** 是否成功 */
+    success: boolean;
+
+    /** 下载的音频文件列表（包含完整元数据） */
+    audioFiles: AudioFile[];
+
+    /** 错误信息（失败时） */
+    error?: string;
+}
+
+/**
+ * 视频分P/分集信息（内部使用）
  */
 export interface VideoPartInfo {
     /** 序号（从1开始） */
@@ -13,17 +93,9 @@ export interface VideoPartInfo {
 }
 
 /**
- * 平台枚举
- */
-export enum DownloadPlatform {
-    BILIBILI = 'bilibili',
-    DOUYIN = 'douyin',
-    XIGUA = 'xigua',
-    YOUTUBE = 'youtube'
-}
-
-/**
- * 视频信息接口（统一格式）
+ * 视频信息接口（适配器内部使用）
+ *
+ * 用于适配器在下载前获取视频信息，然后填充到 AudioFile 中
  */
 export interface VideoInfo {
     /** 视频ID（平台唯一标识） */
@@ -55,41 +127,12 @@ export interface VideoInfo {
 }
 
 /**
- * 下载选项
- */
-export interface DownloadOptions {
-    /** 视频URL或ID */
-    url: string;
-    /** 输出目录（临时目录） */
-    outputDir: string;
-    /** 文件命名模板（可选） */
-    fileNamePattern?: string;
-    /** 选中的分P索引（可选，undefined表示全部） */
-    selectedParts?: number[];
-    /** 仅下载音频（默认 true） */
-    audioOnly?: boolean;
-    /** 质量选项（可选） */
-    quality?: string;
-}
-
-/**
- * 下载结果
- */
-export interface DownloadResult {
-    /** 是否成功 */
-    success: boolean;
-    /** 下载的文件路径列表 */
-    filePaths: string[];
-    /** 视频信息 */
-    videoInfo: VideoInfo;
-    /** 错误信息（失败时） */
-    error?: string;
-}
-
-/**
  * 下载适配器接口
  *
- * 所有平台的下载适配器必须实现此接口
+ * 核心设计理念：
+ * - download() 方法返回的 AudioFile[] 应该包含适配器能提供的所有信息
+ * - 适配器能提供什么就填充什么（标题、描述、封面、发布时间等）
+ * - 服务层直接使用这些数据，无需额外判断和转换
  */
 export interface IDownloadAdapter {
     /**
@@ -112,18 +155,16 @@ export interface IDownloadAdapter {
     extractVideoId(url: string): string | null;
 
     /**
-     * 获取视频信息（包括分P列表）
-     * @param url - 视频URL或ID
-     * @returns Promise<视频信息>
-     * @throws Error - 当URL无效或获取失败时抛出
-     */
-    getVideoInfo(url: string): Promise<VideoInfo>;
-
-    /**
-     * 下载视频/音频
+     * 下载音频并返回完整的文件信息（核心方法）
+     *
+     * 适配器应该：
+     * 1. 下载音频文件到 outputDir
+     * 2. 尽可能下载封面（如果支持）
+     * 3. 提取视频信息（标题、描述、发布时间等）
+     * 4. 返回包含完整元数据的 AudioFile[]
+     *
      * @param options - 下载选项
-     * @returns Promise<下载结果>
-     * @throws Error - 当下载失败时抛出
+     * @returns Promise<下载结果，包含完整元数据>
      */
     download(options: DownloadOptions): Promise<DownloadResult>;
 
@@ -134,16 +175,14 @@ export interface IDownloadAdapter {
     checkAvailability(): Promise<boolean>;
 
     /**
-     * 下载视频封面图片（可选方法）
+     * 获取视频信息（可选方法，仅用于预览）
+     *
+     * 注意：download() 方法内部会自动获取视频信息并填充到 AudioFile 中
+     * 这个方法仅用于在下载前预览视频信息（如前端显示分P列表）
      *
      * @param url - 视频URL或ID
-     * @param outputDir - 输出目录（绝对路径）
-     * @param fileName - 封面文件名（不含扩展名）
-     * @returns Promise<封面文件的绝对路径>，失败返回 null
+     * @returns Promise<视频信息>
+     * @throws Error - 当URL无效或获取失败时抛出
      */
-    downloadCover?(
-        url: string,
-        outputDir: string,
-        fileName: string
-    ): Promise<string | null>;
+    getVideoInfo?(url: string): Promise<VideoInfo>;
 }

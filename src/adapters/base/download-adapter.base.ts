@@ -28,12 +28,7 @@ export abstract class BaseDownloadAdapter implements IDownloadAdapter {
     abstract extractVideoId(url: string): string | null;
 
     /**
-     * 获取视频信息（抽象方法，子类实现）
-     */
-    abstract getVideoInfo(url: string): Promise<VideoInfo>;
-
-    /**
-     * 下载视频/音频（抽象方法，子类实现）
+     * 下载音频并返回完整信息（抽象方法，子类实现）
      */
     abstract download(options: DownloadOptions): Promise<DownloadResult>;
 
@@ -79,18 +74,5 @@ export abstract class BaseDownloadAdapter implements IDownloadAdapter {
                 console.error(`${prefix} ${message}`);
                 break;
         }
-    }
-
-    /**
-     * 默认实现：不支持封面下载
-     * 子类可以覆盖此方法提供封面下载功能
-     */
-    async downloadCover(
-        url: string,
-        outputDir: string,
-        fileName: string
-    ): Promise<string | null> {
-        this.log(`平台 ${this.platform} 暂不支持封面下载`, 'warn');
-        return null;
     }
 }
