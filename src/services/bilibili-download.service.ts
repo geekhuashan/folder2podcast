@@ -36,6 +36,8 @@ export interface TaskProgress {
     error?: string;
     createdAt: number;
     updatedAt: number;
+    // 缓存的视频信息,避免重复获取
+    videoInfo?: BBDownVideoInfo;
 }
 
 /**
@@ -145,12 +147,13 @@ export class BilibiliDownloadService {
 
             // 3. 确定目标播客名称
             let targetPodcastName: string;
+            let videoInfo: BBDownVideoInfo | undefined;
 
             if (podcastName) {
                 targetPodcastName = podcastName;
             } else if (autoCreatePodcast) {
                 // 自动创建播客：先获取视频信息，从视频标题生成播客名
-                const videoInfo = await this.getVideoInfo(url);
+                videoInfo = await this.getVideoInfo(url);
                 targetPodcastName = this.sanitizePodcastName(videoInfo.title);
             } else {
                 throw new Error('未指定播客名称，且 autoCreatePodcast 为 false');
@@ -194,31 +197,25 @@ export class BilibiliDownloadService {
             const firstFilePath = path.join(AUDIO_DIR, downloadResult.filePaths[0]);
             const fileName = path.basename(firstFilePath);
 
-            // 获取视频信息（用于返回结果）
-            let videoInfo: BilibiliVideoInfo = {
-                bvid: '',
-                title: episodeTitle || 'Unknown'
-            };
-
-            try {
-                // 如果需要视频信息，可以再次获取（但通常不需要，因为元数据已保存）
-                const adapter = this.adapterFactory.getAdapter(DownloadPlatform.BILIBILI);
-                const fullVideoInfo = await this.downloadManager.getVideoInfo(adapter, url);
-                videoInfo = {
-                    bvid: fullVideoInfo.id,
-                    title: fullVideoInfo.title
+            // ✨ 优化：如果已有 videoInfo 则复用，否则使用默认值
+            // （videoInfo 可能在 autoCreatePodcast=true 时已获取）
+            const finalVideoInfo: BilibiliVideoInfo = videoInfo
+                ? {
+                    bvid: videoInfo.bvid,
+                    title: videoInfo.title
+                }
+                : {
+                    bvid: '',
+                    title: episodeTitle || 'Unknown'
                 };
-            } catch (error) {
-                console.warn('获取视频信息失败，使用默认值:', error);
-            }
 
             const result: BilibiliDownloadResult = {
                 success: true,
                 filePath: firstFilePath,
                 fileName,
                 podcastName: targetPodcastName,
-                episodeTitle: episodeTitle || videoInfo.title,
-                videoInfo
+                episodeTitle: episodeTitle || finalVideoInfo.title,
+                videoInfo: finalVideoInfo
             };
 
             console.log(`下载完成: ${fileName}（共 ${downloadResult.filePaths.length} 个文件）`);
@@ -267,6 +264,7 @@ export class BilibiliDownloadService {
 
         // 2. 确定目标播客名称（需要同步执行）
         let targetPodcastName: string;
+        let videoInfo: BBDownVideoInfo | undefined;
 
         try {
             // 获取 Bilibili 适配器
@@ -282,13 +280,14 @@ export class BilibiliDownloadService {
                 targetPodcastName = podcastName;
             } else if (autoCreatePodcast) {
                 // 自动创建播客：先获取视频信息，从视频标题生成播客名
-                const videoInfo = await this.getVideoInfo(url);
+                // ✨ 优化：获取一次视频信息并缓存，避免后续重复获取
+                videoInfo = await this.getVideoInfo(url);
                 targetPodcastName = this.sanitizePodcastName(videoInfo.title);
             } else {
                 throw new Error('未指定播客名称，且 autoCreatePodcast 为 false');
             }
 
-            // 3. 创建初始任务进度
+            // 3. 创建初始任务进度（包含缓存的视频信息）
             const now = Date.now();
             const initialProgress: TaskProgress = {
                 taskId,
@@ -301,6 +300,7 @@ export class BilibiliDownloadService {
                 url,
                 podcastName: targetPodcastName,
                 episodeTitle,
+                videoInfo,  // ✨ 缓存视频信息
                 createdAt: now,
                 updatedAt: now
             };
@@ -333,6 +333,7 @@ export class BilibiliDownloadService {
                 url,
                 podcastName: podcastName || 'Unknown',
                 episodeTitle,
+                videoInfo,  // ✨ 缓存视频信息（即使失败也可能已获取）
                 error: error instanceof Error ? error.message : String(error),
                 createdAt: now,
                 updatedAt: now

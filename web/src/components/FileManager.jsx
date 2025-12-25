@@ -50,7 +50,7 @@ export default function FileManager(props) {
   const modal = useModal();
 
   // 资源加载
-  const [files, { refetch }] = createResource(() => props.podcast.id, podcastsAPI.getFiles);
+  // ✅ 修复：只调用一次 API，避免重复请求导致并发扫描和数据不一致
   const [episodes, { refetch: refetchEpisodes }] = createResource(() => props.podcast.id, episodesAPI.getEpisodes);
 
   // 界面状态
@@ -68,7 +68,7 @@ export default function FileManager(props) {
 
   // 音频文件列表
   const audioFiles = createMemo(() => {
-    return files()?.data?.map(episode => episode.fileName) || [];
+    return episodes()?.data?.map(episode => episode.fileName) || [];
   });
 
   // 选中的剧集详情
@@ -140,7 +140,6 @@ export default function FileManager(props) {
     }
 
     // 刷新列表
-    refetch();
     refetchEpisodes();
 
     // 清空输入框
@@ -169,7 +168,6 @@ export default function FileManager(props) {
         setSelectedFileName(null);
       }
 
-      refetch();
       refetchEpisodes();
     } catch (error) {
       toast.error(`删除失败: ${error.message}`);
@@ -179,7 +177,6 @@ export default function FileManager(props) {
   // 剧集编辑成功回调
   const handleEpisodeSave = () => {
     refetchEpisodes();
-    refetch();
   };
 
   // 选中文件并打开编辑器
@@ -352,7 +349,6 @@ export default function FileManager(props) {
             toast.success(result.data.message || `已更新 ${result.data.updated} 个剧集的排序`);
 
             // 刷新列表
-            refetch();
             refetchEpisodes();
           } catch (error) {
             toast.error(`重新排序失败: ${error.message}`);
@@ -550,7 +546,7 @@ export default function FileManager(props) {
 
       {/* 文件列表 */}
       <Show
-        when={!files.loading}
+        when={!episodes.loading}
         fallback={
           <div style={{
             display: 'flex',

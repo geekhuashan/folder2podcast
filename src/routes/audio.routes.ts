@@ -2,7 +2,7 @@
  * 音频文件访问路由
  *
  * 职责：
- * - 处理音频文件的访问请求
+ * - 处理音频文件和封面图片的访问请求
  * - 支持用户隔离（audio/{userId}/{podcastName}/{fileName}）
  * - 兼容公开访问（RSS Feed）
  */
@@ -12,6 +12,29 @@ import path from 'path';
 import fs from 'fs-extra';
 import { getEnvConfig } from '../utils/env';
 import { getCurrentUser } from '../utils/auth';
+
+/**
+ * 根据文件扩展名获取 MIME type
+ */
+function getMimeType(fileName: string): string {
+    const ext = path.extname(fileName).toLowerCase();
+    const mimeTypes: { [key: string]: string } = {
+        // 音频格式
+        '.mp3': 'audio/mpeg',
+        '.m4a': 'audio/x-m4a',
+        '.aac': 'audio/aac',
+        '.wav': 'audio/wav',
+        '.ogg': 'audio/ogg',
+        '.flac': 'audio/flac',
+        // 图片格式
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.png': 'image/png',
+        '.gif': 'image/gif',
+        '.webp': 'image/webp',
+    };
+    return mimeTypes[ext] || 'application/octet-stream';
+}
 
 /**
  * 注册音频文件访问路由
@@ -47,7 +70,8 @@ export async function registerAudioRoutes(server: FastifyInstance): Promise<void
                         const fileStream = fs.createReadStream(userFilePath);
                         const stat = await fs.stat(userFilePath);
 
-                        reply.header('Content-Type', 'audio/mpeg');
+                        // ✅ 根据文件扩展名动态设置 Content-Type
+                        reply.header('Content-Type', getMimeType(fileName));
                         reply.header('Content-Length', stat.size);
                         reply.header('Accept-Ranges', 'bytes');
 
@@ -75,7 +99,8 @@ export async function registerAudioRoutes(server: FastifyInstance): Promise<void
                         const fileStream = fs.createReadStream(candidatePath);
                         const stat = await fs.stat(candidatePath);
 
-                        reply.header('Content-Type', 'audio/mpeg');
+                        // ✅ 根据文件扩展名动态设置 Content-Type
+                        reply.header('Content-Type', getMimeType(fileName));
                         reply.header('Content-Length', stat.size);
                         reply.header('Accept-Ranges', 'bytes');
 

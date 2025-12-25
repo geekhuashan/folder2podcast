@@ -178,7 +178,19 @@ export async function generatePodcastFeedData(podcastId: string): Promise<Podcas
     return bTime - aTime;  // 降序：最新的在前
   });
 
-  // 7. 转换播客为标准化格式
+  // ⭐ 8. 智能封面回退逻辑
+  // 如果播客没有封面，使用最新的有封面的剧集的封面作为播客封面
+  let finalPodcastImageUrl = podcastImageUrl;
+  if (!finalPodcastImageUrl && episodes.length > 0) {
+    // 遍历已排序的剧集（最新的在前），找到第一个有封面的剧集
+    const episodeWithCover = episodes.find(ep => ep.coverUrl);
+    if (episodeWithCover) {
+      finalPodcastImageUrl = getEpisodeCoverUrl(dirName, episodeWithCover.coverUrl!);
+      console.log(`[智能封面] 播客 "${podcast.title}" 没有封面，使用剧集封面: ${episodeWithCover.fileName}`);
+    }
+  }
+
+  // 9. 转换播客为标准化格式
   const feedPodcast: FeedPodcast = {
     id: podcast.id,
     userId: podcast.userId,
@@ -192,7 +204,7 @@ export async function generatePodcastFeedData(podcastId: string): Promise<Podcas
     category: podcast.category || 'Technology',
     explicit: !!podcast.explicit,
     coverFileName: podcastCoverFileName,
-    imageUrl: podcastImageUrl,
+    imageUrl: finalPodcastImageUrl,  // ⭐ 使用智能封面
     titleFormat: podcast.titleFormat || 'clean',
     episodeNumberStrategy: podcast.episodeNumberStrategy || 'prefix',
     useMtime: !!podcast.useMTime,  // 注意大小写：useMTime
