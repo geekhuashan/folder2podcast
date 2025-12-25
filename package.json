@@ -50,6 +50,7 @@
     "fastify": "^4.25.2",
     "feed": "^4.2.2",
     "fs-extra": "^11.2.0",
+    "music-metadata": "^11.10.3",
     "path": "^0.12.7",
     "pinyin": "^3.0.0-alpha.5",
     "podcast": "^2.0.1",

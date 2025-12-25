@@ -19,6 +19,25 @@ import { EpisodeMetadata, EpisodesConfig } from '../types';
 
 const AUDIO_DIR = getEnvConfig().AUDIO_DIR;
 
+// ====== 音频元数据提取 ======
+
+/**
+ * 提取音频文件的时长
+ *
+ * @param filePath - 音频文件完整路径
+ * @returns 时长（秒），提取失败返回 0
+ */
+async function extractAudioDuration(filePath: string): Promise<number> {
+  try {
+    const { parseFile } = await import('music-metadata');
+    const metadata = await parseFile(filePath, { duration: true });
+    return Math.round(metadata.format.duration || 0);
+  } catch (error) {
+    console.warn(`[extractAudioDuration] 提取失败: ${path.basename(filePath)}`, error);
+    return 0;
+  }
+}
+
 // ====== 播客 CRUD 操作 ======
 
 /**
@@ -215,12 +234,16 @@ export async function scanPodcastEpisodes(podcastId: string) {
 
   for (const ep of episodesList) {
     const episodeId = `${podcastId}:${ep.fileName}`;
+    const filePath = path.join(podcastPath, ep.fileName);
 
     // 查询数据库中是否已存在该剧集
     const existing = existingEpisodes.find(e => e.id === episodeId);
 
     if (!existing) {
-      // ✅ 首次扫描：创建完整记录
+      // ✅ 首次扫描：提取时长并创建完整记录
+      console.log(`[scanPodcastEpisodes] 新剧集 ${ep.fileName}，提取时长...`);
+      const duration = await extractAudioDuration(filePath);
+
       await db.insert(episodesTable).values({
         id: episodeId,
         podcastId,
@@ -229,23 +252,38 @@ export async function scanPodcastEpisodes(podcastId: string) {
         description: ep.description,
         pubDate: ep.pubDate,      // ⭐ 一次生成，永不自动改变
         coverUrl: ep.coverUrl,
-        duration: ep.duration,
+        duration,                 // ⭐ 使用提取的真实时长
         fileSize: ep.fileSize,
         version: 1,               // ⭐ 初始版本号为 1
         sortOrder: nextSortOrder, // ⭐ 自动生成序号
       });
       nextSortOrder++;
     } else {
-      // ✅ 已存在：只更新文件属性（不修改用户可编辑的元数据）
-      await db.update(episodesTable)
-        .set({
-          duration: ep.duration,    // 文件可能被重新编码
-          fileSize: ep.fileSize,    // 文件大小可能变化
-          updatedAt: new Date(),
-          // ⚠️ 不更新 title, description, pubDate, coverUrl, version, sortOrder
-          // 这些字段只能通过 Web 编辑器手动修改
-        })
-        .where(eq(episodesTable.id, episodeId));
+      // ✅ 已存在：智能判断是否需要提取时长
+      if (existing.duration === 0 || existing.duration === null) {
+        // 旧数据或缺失时长：自动修复
+        console.log(`[scanPodcastEpisodes] 修复旧数据 ${ep.fileName}，提取时长...`);
+        const duration = await extractAudioDuration(filePath);
+
+        await db.update(episodesTable)
+          .set({
+            duration,             // ⭐ 修复时长
+            fileSize: ep.fileSize,
+            updatedAt: new Date(),
+          })
+          .where(eq(episodesTable.id, episodeId));
+      } else {
+        // 时长已存在：完全跳过提取，信任数据库
+        await db.update(episodesTable)
+          .set({
+            fileSize: ep.fileSize,
+            updatedAt: new Date(),
+            // ⚠️ 不更新 duration，信任数据库缓存
+            // ⚠️ 不更新 title, description, pubDate, coverUrl, version, sortOrder
+            // 这些字段只能通过 Web 编辑器手动修改
+          })
+          .where(eq(episodesTable.id, episodeId));
+      }
     }
   }
 
@@ -353,7 +391,7 @@ async function parseEpisodeInfo(
     description: metadata?.description,
     // ✅ 优先使用 episodes.json 中的 pubDate，否则使用生成的 pubDate
     pubDate: metadata?.pubDate ? new Date(metadata.pubDate) : episode.pubDate,
-    duration: undefined, // 音频时长需要专门解析，这里暂时设为 undefined
+    duration: 0, // ⭐ 不在这里提取，延迟到数据库同步时按需提取
     fileSize: file.stat.size,
     // ✅ 封面：优先使用 episodes.json，其次自动检测
     coverUrl,
