@@ -2,7 +2,6 @@ import { createSignal, createResource, Show, onMount } from 'solid-js';
 import PodcastList from './components/PodcastList';
 import FileManager from './components/FileManager';
 import FloatingTaskWindow from './components/FloatingTaskWindow';
-import BilibiliDownload from './components/BilibiliDownload';
 import { Login } from './components/Login';
 import { ToastProvider, useToast } from './components/Toast';
 import { podcastsAPI, authAPI } from './utils/api';
@@ -157,33 +156,6 @@ export default function App() {
                             {podcasts()?.data?.length || 0}
                           </span>
                         </Show>
-                      </button>
-
-                      {/* 视频下载 */}
-                      <button
-                        class={`nav-tab ${currentView() === 'download' ? 'active' : ''}`}
-                        onClick={() => setCurrentView('download')}
-                        style={{
-                          padding: '0.5rem 1rem',
-                          border: 'none',
-                          background: currentView() === 'download' ? '#eff6ff' : 'transparent',
-                          color: currentView() === 'download' ? '#3b82f6' : '#64748b',
-                          'border-radius': '0.5rem',
-                          cursor: 'pointer',
-                          'font-weight': '500',
-                          'font-size': '0.9375rem',
-                          transition: 'all 0.2s',
-                          display: 'flex',
-                          'align-items': 'center',
-                          gap: '0.5rem'
-                        }}
-                      >
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                          <polyline points="7 10 12 15 17 10"/>
-                          <line x1="12" y1="15" x2="12" y2="3"/>
-                        </svg>
-                        视频下载
                       </button>
 
                       {/* 设置 */}
@@ -341,15 +313,6 @@ export default function App() {
                   refetchTrigger={refetchTrigger()}
                   highlightPodcast={highlightPodcast()}
                   isGuest={isGuest()}
-                  onGoToDownload={() => setCurrentView('download')}
-                />
-              </Show>
-
-              {/* 视频下载页面 */}
-              <Show when={currentView() === 'download'}>
-                <BilibiliDownload
-                  podcasts={podcasts()?.data || []}
-                  onDownloadComplete={handleDownloadComplete}
                 />
               </Show>
 

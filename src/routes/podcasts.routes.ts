@@ -58,6 +58,7 @@ export async function registerPodcastsRoutes(server: FastifyInstance) {
         author: podcast.author,
         language: podcast.language,
         category: podcast.category,
+        episodeCount: podcast.episodeCount,
         feedUrl: `/feeds/${encodeURIComponent(podcast.id)}.xml`,
         createdAt: podcast.createdAt,
       })),

@@ -16,6 +16,7 @@ import { createSignal, createResource, For, Show, createMemo } from 'solid-js';
 import { podcastsAPI, episodesAPI } from '../utils/api';
 import ConfigEditor from './ConfigEditor';
 import EpisodeEditorModal from './EpisodeEditorModal';
+import DownloadVideoModal from './DownloadVideoModal';
 import { useToast } from './Toast';
 import { useModal } from '../contexts/ModalContext';
 import {
@@ -56,6 +57,7 @@ export default function FileManager(props) {
   // 界面状态
   const [showConfigEditor, setShowConfigEditor] = createSignal(false);
   const [showEpisodeEditor, setShowEpisodeEditor] = createSignal(false);
+  const [showDownloadModal, setShowDownloadModal] = createSignal(false);
   const [selectedFileName, setSelectedFileName] = createSignal(null);
   const [rssCopied, setRssCopied] = createSignal(false);
 
@@ -420,6 +422,15 @@ export default function FileManager(props) {
               disabled={uploadStats().uploading > 0}
             />
           </label>
+          <button class="btn" onClick={() => setShowDownloadModal(true)} style={{
+            background: 'rgba(255,255,255,0.2)',
+            border: '1px solid rgba(255,255,255,0.3)',
+            color: 'white',
+            'backdrop-filter': 'blur(10px)',
+            'font-weight': '500'
+          }}>
+            📥 下载视频
+          </button>
           <button class="btn" onClick={() => setShowConfigEditor(true)} style={{
             background: 'rgba(255,255,255,0.2)',
             border: '1px solid rgba(255,255,255,0.3)',
@@ -773,6 +784,17 @@ export default function FileManager(props) {
           onClose={() => setShowConfigEditor(false)}
         />
       </Show>
+
+      {/* 下载视频弹窗（播客内部，隐藏播客选择器） */}
+      <DownloadVideoModal
+        isOpen={showDownloadModal()}
+        onClose={() => setShowDownloadModal(false)}
+        defaultPodcastId={props.podcast.dirName}
+        onTaskAdded={() => {
+          // 任务添加成功后刷新剧集列表
+          refetchEpisodes();
+        }}
+      />
     </div>
   );
 }

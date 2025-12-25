@@ -1,6 +1,7 @@
 import { createSignal, createResource, For, Show, createEffect } from 'solid-js';
 import { podcastsAPI } from '../utils/api';
 import CreatePodcastModal from './CreatePodcastModal';
+import DownloadVideoModal from './DownloadVideoModal';
 import { useToast } from './Toast';
 import { useModal } from '../contexts/ModalContext';
 import { getFullFeedUrl } from '../utils/url';
@@ -29,6 +30,7 @@ export default function PodcastList(props) {
   const modal = useModal();
   const [podcasts, { refetch }] = createResource(podcastsAPI.getAll);
   const [showCreateModal, setShowCreateModal] = createSignal(false);
+  const [showDownloadModal, setShowDownloadModal] = createSignal(false);
   const [copiedPodcast, setCopiedPodcast] = createSignal(null);
   const [uploading, setUploading] = createSignal(false);
   let folderInputRef;
@@ -226,7 +228,7 @@ export default function PodcastList(props) {
               </button>
               <button
                 class="btn btn-secondary"
-                onClick={props.onGoToDownload}
+                onClick={() => setShowDownloadModal(true)}
                 style={{ display: 'flex', 'align-items': 'center', gap: '0.5rem' }}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -234,7 +236,7 @@ export default function PodcastList(props) {
                   <polyline points="7 10 12 15 17 10"/>
                   <line x1="12" y1="15" x2="12" y2="3"/>
                 </svg>
-                📺 视频下载
+                📥 下载视频
               </button>
               <button
                 class="btn btn-primary"
@@ -338,6 +340,14 @@ export default function PodcastList(props) {
         show={showCreateModal()}
         onClose={() => setShowCreateModal(false)}
         onSuccess={handleCreateSuccess}
+      />
+      <DownloadVideoModal
+        isOpen={showDownloadModal()}
+        onClose={() => setShowDownloadModal(false)}
+        onTaskAdded={() => {
+          // 任务添加成功后可选择刷新播客列表
+          // refetch();
+        }}
       />
     </>
   );

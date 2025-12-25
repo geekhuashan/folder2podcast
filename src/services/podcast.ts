@@ -41,13 +41,31 @@ async function extractAudioDuration(filePath: string): Promise<number> {
 // ====== 播客 CRUD 操作 ======
 
 /**
- * 获取用户的所有播客
+ * 获取用户的所有播客（包含剧集数量）
  *
  * @param userId - 用户 ID
- * @returns 播客列表
+ * @returns 播客列表（包含 episodeCount 字段）
  */
 export async function getUserPodcasts(userId: string) {
-  return await db.select().from(podcasts).where(eq(podcasts.userId, userId)).all();
+  const podcastList = await db.select().from(podcasts).where(eq(podcasts.userId, userId)).all();
+
+  // 为每个播客查询剧集数量
+  const podcastsWithCount = await Promise.all(
+    podcastList.map(async (podcast) => {
+      const episodeCount = await db
+        .select({ count: episodesTable.id })
+        .from(episodesTable)
+        .where(eq(episodesTable.podcastId, podcast.id))
+        .all();
+
+      return {
+        ...podcast,
+        episodeCount: episodeCount.length,
+      };
+    })
+  );
+
+  return podcastsWithCount;
 }
 
 /**
