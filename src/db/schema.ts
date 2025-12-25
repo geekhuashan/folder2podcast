@@ -44,10 +44,10 @@ export const podcasts = sqliteTable('podcasts', {
   title: text('title').notNull(),
   // 播客描述
   description: text('description'),
-  // 作者
-  author: text('author'),
-  // 联系邮箱
-  email: text('email'),
+  // 作者（默认值：提示用户修改）
+  author: text('author').default('Podcast Author'),
+  // 联系邮箱（默认值：明显的占位符，提示用户修改）
+  email: text('email').default('change-this@example.com'),
   // 网站地址
   websiteUrl: text('website_url'),
   // 语言代码（默认中文）

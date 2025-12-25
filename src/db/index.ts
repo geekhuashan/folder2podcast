@@ -50,8 +50,8 @@ export async function initDatabase() {
       dir_name TEXT NOT NULL,
       title TEXT NOT NULL,
       description TEXT,
-      author TEXT,
-      email TEXT,
+      author TEXT DEFAULT 'Podcast Author',
+      email TEXT DEFAULT 'change-this@example.com',
       website_url TEXT,
       language TEXT DEFAULT 'zh-cn',
       category TEXT DEFAULT 'Technology',
@@ -59,6 +59,7 @@ export async function initDatabase() {
       title_format TEXT DEFAULT 'clean',
       episode_number_strategy TEXT DEFAULT 'prefix',
       use_mtime INTEGER DEFAULT 0,
+      base_pub_date INTEGER,
       created_at INTEGER DEFAULT (unixepoch()),
       updated_at INTEGER DEFAULT (unixepoch()),
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -100,6 +101,21 @@ export async function initDatabase() {
       .run('admin', 'admin', 'admin', 'Administrator');
 
     console.log('✅ Default admin user created (username: admin, password: admin)');
+  }
+
+  // ====== 更新现有播客的空 author/email ======
+  const updateResult = sqlite
+    .prepare(`
+      UPDATE podcasts
+      SET
+        author = COALESCE(NULLIF(author, ''), 'Podcast Author'),
+        email = COALESCE(NULLIF(email, ''), 'change-this@example.com')
+      WHERE author IS NULL OR author = '' OR email IS NULL OR email = ''
+    `)
+    .run();
+
+  if (updateResult.changes > 0) {
+    console.log(`✅ Updated ${updateResult.changes} podcasts with default author/email`);
   }
 
   console.log('✅ Database initialized at:', DB_PATH);
