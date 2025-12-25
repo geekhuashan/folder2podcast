@@ -259,28 +259,43 @@ export async function scanPodcastEpisodes(podcastId: string) {
       });
       nextSortOrder++;
     } else {
-      // ✅ 已存在：智能判断是否需要提取时长
+      // ✅ 已存在：智能判断是否需要提取时长和同步元数据
+      let duration = existing.duration;
+
       if (existing.duration === 0 || existing.duration === null) {
         // 旧数据或缺失时长：自动修复
         console.log(`[scanPodcastEpisodes] 修复旧数据 ${ep.fileName}，提取时长...`);
-        const duration = await extractAudioDuration(filePath);
+        duration = await extractAudioDuration(filePath);
+      }
 
+      // ⭐ 检查 episodes.json 中的元数据是否与数据库不一致，需要同步
+      const needsMetadataSync = (
+        ep.title !== existing.title ||
+        ep.description !== existing.description ||
+        ep.pubDate?.getTime() !== existing.pubDate?.getTime() ||
+        ep.coverUrl !== existing.coverUrl
+      );
+
+      if (needsMetadataSync) {
+        console.log(`[scanPodcastEpisodes] 同步元数据: ${ep.fileName}`);
         await db.update(episodesTable)
           .set({
-            duration,             // ⭐ 修复时长
+            title: ep.title,             // ✅ 同步 episodes.json 中的标题
+            description: ep.description, // ✅ 同步描述
+            pubDate: ep.pubDate,        // ✅ 同步发布时间
+            coverUrl: ep.coverUrl,      // ✅ 同步封面
+            duration,                   // ✅ 使用提取或现有的时长
             fileSize: ep.fileSize,
             updatedAt: new Date(),
           })
           .where(eq(episodesTable.id, episodeId));
       } else {
-        // 时长已存在：完全跳过提取，信任数据库
+        // 元数据一致：只更新 fileSize 和 duration（如有需要）
         await db.update(episodesTable)
           .set({
+            duration,
             fileSize: ep.fileSize,
             updatedAt: new Date(),
-            // ⚠️ 不更新 duration，信任数据库缓存
-            // ⚠️ 不更新 title, description, pubDate, coverUrl, version, sortOrder
-            // 这些字段只能通过 Web 编辑器手动修改
           })
           .where(eq(episodesTable.id, episodeId));
       }

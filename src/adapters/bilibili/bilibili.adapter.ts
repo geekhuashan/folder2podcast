@@ -20,6 +20,7 @@ import {
     parseOwnerInfo,
     buildCoverDownloadArgs,
     generateEpisodeDescription,
+    extractTitleFromFileName,
     VideoInfo as BBDownVideoInfo
 } from './bbdown.utils';
 
@@ -282,12 +283,33 @@ export class BilibiliAdapter extends BaseDownloadAdapter {
         // 🔥 关键：生成描述（包含BV号、UP主ID、发布日期）
         const description = generateEpisodeDescription(videoInfo);
 
+        // ⭐ 智能标题提取（修复占位标题问题）
+        // 1. 优先从文件名提取真实标题（适用于 BBDown 下载的分P视频）
+        let title = extractTitleFromFileName(fileName);
+
+        // 2. 如果文件名提取失败，检查 partInfo.title 是否为占位符
+        if (!title && partInfo) {
+            const isPlaceholder = /^P\d+$/i.test(partInfo.title);
+            if (isPlaceholder) {
+                // 占位符标题（如 "P6"），使用视频主标题
+                title = videoInfo.title;
+            } else {
+                // 真实的分P标题，直接使用
+                title = partInfo.title;
+            }
+        }
+
+        // 3. 最终兜底：使用视频主标题
+        if (!title) {
+            title = videoInfo.title;
+        }
+
         // 构建 AudioFile 对象
         const audioFile: AudioFile = {
             filePath,
             fileName,
-            // ✅ 标题：优先使用分P标题，否则使用视频标题
-            title: partInfo?.title || videoInfo.title,
+            // ✅ 标题：使用智能提取的标题
+            title,
             // ✅ 描述：自动生成的元数据描述
             description,
             // ✅ 封面：下载的封面路径

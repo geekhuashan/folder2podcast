@@ -354,6 +354,45 @@ export const extractEpisodeTitle = (videoTitle: string): string => {
 };
 
 /**
+ * 从 BBDown 下载的文件名中提取剧集标题
+ *
+ * 说明：
+ * - BBDown 下载的分P视频文件名格式为 `[PXX]实际标题.扩展名`
+ * - 此函数提取 `[PXX]` 后面的部分作为真实标题
+ * - 用于修复 BBDown -info 输出不完整导致的占位标题问题
+ *
+ * @param fileName - 文件名（如 "[P06]6.梯田＋爸我回来了.m4a"）
+ * @returns 剧集标题（如 "6.梯田＋爸我回来了"），提取失败返回 null
+ *
+ * @example
+ * extractTitleFromFileName('[P06]6.梯田＋爸我回来了.m4a')
+ * // => '6.梯田＋爸我回来了'
+ *
+ * extractTitleFromFileName('[P01]1.以父之名.m4a')
+ * // => '1.以父之名'
+ *
+ * extractTitleFromFileName('normal-file.m4a')
+ * // => null
+ */
+export function extractTitleFromFileName(fileName: string): string | null {
+    if (!fileName) {
+        return null;
+    }
+
+    // 去除扩展名
+    const nameWithoutExt = fileName.replace(/\.[^/.]+$/, '');
+
+    // 匹配 [PXX] 格式后的内容（不区分大小写）
+    const match = nameWithoutExt.match(/\[P\d+\](.+)/i);
+
+    if (match && match[1]) {
+        return match[1].trim();
+    }
+
+    return null;
+}
+
+/**
  * 视频分P信息接口
  */
 export interface VideoPage {
