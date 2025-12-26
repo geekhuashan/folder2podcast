@@ -64,9 +64,10 @@ export class PodcastServer {
 
       // 注册 Session 管理
       await this.server.register(fastifySession, {
-        secret: process.env.SESSION_SECRET || 'folder2podcast-secret-key-change-in-production',
+        secret: process.env.SESSION_SECRET || 'folder2podcast-secret-key',
         cookie: {
-          secure: false, // 局域网不需要 HTTPS
+          secure: false, // 内网不需要 HTTPS
+          sameSite: 'lax', // 修复刷新时 Cookie 丢失问题
           maxAge: 7 * 24 * 60 * 60 * 1000, // 7 天
         },
       });
