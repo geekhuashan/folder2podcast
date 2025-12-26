@@ -8,7 +8,6 @@
  * - 文件系统路径: audio/{userId}/{dirName}/
  */
 
-import fs from "fs-extra";
 import path from "path";
 import { db } from "../db";
 import { podcasts, episodes as episodesTable } from "../db/schema";
@@ -18,31 +17,56 @@ import {
   validateFileName,
   parseEpisodeNumber,
 } from "../utils/episode";
-import { getEnvConfig } from "../utils/env";
+import { getStorage } from "./storage";
+import type { IStorage } from "./storage";
 import { EpisodeMetadata, EpisodesConfig } from "../types";
-
-const AUDIO_DIR = getEnvConfig().AUDIO_DIR;
 
 // ====== 音频元数据提取 ======
 
 /**
  * 提取音频文件的时长
  *
- * @param filePath - 音频文件完整路径
+ * @param storage - 存储实例
+ * @param relativePath - 音频文件相对路径
  * @returns 时长（秒），提取失败返回 0
+ *
+ * 说明：
+ * - 本地模式：直接读取文件
+ * - S3 模式：下载到临时目录再提取
  */
-async function extractAudioDuration(filePath: string): Promise<number> {
+async function extractAudioDuration(storage: IStorage, relativePath: string): Promise<number> {
   try {
-    const { parseFile } = await import("music-metadata");
-    const metadata = await parseFile(filePath, { duration: true });
+    const { parseBuffer } = await import("music-metadata");
+
+    // 读取文件内容
+    const fileBuffer = await storage.readFile(relativePath);
+
+    // 从 Buffer 解析元数据
+    const metadata = await parseBuffer(fileBuffer, { mimeType: getMimeType(relativePath) }, { duration: true });
     return Math.round(metadata.format.duration || 0);
   } catch (error) {
     console.warn(
-      `[extractAudioDuration] 提取失败: ${path.basename(filePath)}`,
+      `[extractAudioDuration] 提取失败: ${path.basename(relativePath)}`,
       error,
     );
     return 0;
   }
+}
+
+/**
+ * 根据文件扩展名获取 MIME 类型
+ */
+function getMimeType(filePath: string): string {
+  const ext = path.extname(filePath).toLowerCase();
+  const mimeTypes: Record<string, string> = {
+    '.mp3': 'audio/mpeg',
+    '.m4a': 'audio/mp4',
+    '.wav': 'audio/wav',
+    '.flac': 'audio/flac',
+    '.ogg': 'audio/ogg',
+    '.aac': 'audio/aac',
+  };
+  return mimeTypes[ext] || 'audio/mpeg';
 }
 
 // ====== 播客 CRUD 操作 ======
@@ -160,8 +184,9 @@ export async function createPodcast(
   }
 
   // 创建目录（用户隔离）
-  const podcastPath = path.join(AUDIO_DIR, userId, dirName);
-  await fs.ensureDir(podcastPath);
+  const storage = getStorage();
+  const podcastPath = `audio/${userId}/${dirName}`;
+  await storage.ensureDirectory(podcastPath);
 
   // 插入数据库
   const podcast = await db
@@ -248,8 +273,9 @@ export async function deletePodcast(
 
   // 可选：删除文件系统目录
   if (deleteFiles) {
-    const podcastPath = path.join(AUDIO_DIR, podcast.userId, podcast.dirName);
-    await fs.remove(podcastPath);
+    const storage = getStorage();
+    const podcastPath = `audio/${podcast.userId}/${podcast.dirName}`;
+    await storage.deleteDirectory(podcastPath);
   }
 }
 
@@ -277,16 +303,17 @@ export async function scanPodcastEpisodes(podcastId: string) {
     throw new Error("播客不存在");
   }
 
-  const podcastPath = path.join(AUDIO_DIR, podcast.userId, podcast.dirName);
+  const storage = getStorage();
+  const podcastPath = `audio/${podcast.userId}/${podcast.dirName}`;
 
   // 📖 读取 episodes.json 配置文件（如果存在）
-  const episodesJsonPath = path.join(podcastPath, "episodes.json");
+  const episodesJsonPath = `${podcastPath}/episodes.json`;
   let episodesMetadata: Record<string, EpisodeMetadata> = {};
 
-  if (await fs.pathExists(episodesJsonPath)) {
+  if (await storage.fileExists(episodesJsonPath)) {
     try {
-      const content = await fs.readFile(episodesJsonPath, "utf-8");
-      const config = JSON.parse(content) as EpisodesConfig;
+      const content = await storage.readFile(episodesJsonPath);
+      const config = JSON.parse(content.toString('utf-8')) as EpisodesConfig;
       episodesMetadata = config.episodes || {};
       console.log(
         `[scanPodcastEpisodes] 读取 episodes.json，找到 ${Object.keys(episodesMetadata).length} 个剧集元数据`,
@@ -297,7 +324,7 @@ export async function scanPodcastEpisodes(podcastId: string) {
   }
 
   // 扫描音频文件
-  const audioFiles = await scanAudioFiles(podcastPath);
+  const audioFiles = await scanAudioFiles(storage, podcastPath);
 
   // 解析剧集信息（传入 episodes.json 中的元数据）
   const episodesList = await Promise.all(
@@ -305,6 +332,7 @@ export async function scanPodcastEpisodes(podcastId: string) {
       (file) =>
         parseEpisodeInfo(
           file,
+          storage,
           podcastPath,
           {
             titleFormat: podcast.titleFormat || "clean",
@@ -332,7 +360,7 @@ export async function scanPodcastEpisodes(podcastId: string) {
 
   for (const ep of episodesList) {
     const episodeId = `${podcastId}:${ep.fileName}`;
-    const filePath = path.join(podcastPath, ep.fileName);
+    const fileRelativePath = `${podcastPath}/${ep.fileName}`;
 
     // 查询数据库中是否已存在该剧集
     const existing = existingEpisodes.find((e) => e.id === episodeId);
@@ -340,7 +368,7 @@ export async function scanPodcastEpisodes(podcastId: string) {
     if (!existing) {
       // ✅ 首次扫描：提取时长并创建完整记录
       console.log(`[scanPodcastEpisodes] 新剧集 ${ep.fileName}，提取时长...`);
-      const duration = await extractAudioDuration(filePath);
+      const duration = await extractAudioDuration(storage, fileRelativePath);
 
       await db.insert(episodesTable).values({
         id: episodeId,
@@ -365,7 +393,7 @@ export async function scanPodcastEpisodes(podcastId: string) {
         console.log(
           `[scanPodcastEpisodes] 修复旧数据 ${ep.fileName}，提取时长...`,
         );
-        duration = await extractAudioDuration(filePath);
+        duration = await extractAudioDuration(storage, fileRelativePath);
       }
 
       // ⭐ 检查 episodes.json 中的元数据是否与数据库不一致，需要同步
@@ -421,7 +449,8 @@ export async function scanPodcastEpisodes(podcastId: string) {
 /**
  * 扫描目录中的音频文件
  *
- * @param dirPath - 目录路径
+ * @param storage - 存储实例
+ * @param dirPath - 目录相对路径
  * @returns 音频文件信息数组
  *
  * 说明：
@@ -430,38 +459,34 @@ export async function scanPodcastEpisodes(podcastId: string) {
  * - 只处理音频文件（mp3, m4a, wav 等）
  */
 async function scanAudioFiles(
+  storage: IStorage,
   dirPath: string,
 ): Promise<Array<{ fileName: string; stat: any }>> {
   const files: Array<{ fileName: string; stat: any }> = [];
 
-  if (!(await fs.pathExists(dirPath))) {
+  if (!(await storage.directoryExists(dirPath))) {
     return files;
   }
 
-  const entries = await fs.readdir(dirPath, { withFileTypes: true });
+  const entries = await storage.listFiles(dirPath, { recursive: false });
 
-  for (const entry of entries) {
-    // 跳过隐藏文件和目录
-    if (entry.name.startsWith(".")) {
-      continue;
-    }
-
-    // 只处理文件
-    if (!entry.isFile()) {
+  for (const fileName of entries) {
+    // 跳过隐藏文件
+    if (fileName.startsWith(".")) {
       continue;
     }
 
     // 验证是否为音频文件
-    if (!validateFileName(entry.name)) {
+    if (!validateFileName(fileName)) {
       continue;
     }
 
     try {
-      const filePath = path.join(dirPath, entry.name);
-      const stat = await fs.stat(filePath);
-      files.push({ fileName: entry.name, stat });
+      const fileRelativePath = `${dirPath}/${fileName}`;
+      const stat = await storage.getFileStats(fileRelativePath);
+      files.push({ fileName, stat });
     } catch (error) {
-      console.warn(`Skipping invalid file: ${entry.name}`, error);
+      console.warn(`Skipping invalid file: ${fileName}`, error);
     }
   }
 
@@ -485,6 +510,7 @@ async function scanAudioFiles(
  */
 async function parseEpisodeInfo(
   file: { fileName: string; stat: any },
+  storage: IStorage,
   dirPath: string,
   config: {
     titleFormat: string;
@@ -498,15 +524,15 @@ async function parseEpisodeInfo(
     useMTime: config.useMTime,
   } as any; // 临时使用 any 避免类型错误
 
-  // 使用现有的 createEpisode 函数（纯函数），传递正确的目录路径
-  const episode = createEpisode(file.fileName, dirPath, episodeConfig);
+  // 使用现有的 createEpisode 函数（纯函数），传递文件统计信息
+  const episode = createEpisode(file.fileName, file.stat, episodeConfig);
 
   // ✅ 自动检测封面文件
   let coverUrl = metadata?.image; // 优先使用 episodes.json 中的 image
   if (!coverUrl) {
     // 如果没有配置，尝试自动检测文件系统中的封面
     const { detectEpisodeCover } = await import("../utils/file.utils");
-    coverUrl = (await detectEpisodeCover(file.fileName, dirPath)) || undefined;
+    coverUrl = (await detectEpisodeCover(storage, file.fileName, dirPath)) || undefined;
   }
 
   return {
@@ -577,4 +603,110 @@ function sortEpisodes(
 
   // 合并
   return [...numbered, ...unnumbered];
+}
+
+/**
+ * 获取播客的下一个排序号
+ *
+ * @param podcastId - 播客ID
+ * @returns 下一个排序号
+ *
+ * 说明：
+ * - 用于文件上传时自动分配 sortOrder
+ * - 确保新添加的剧集排在最后
+ */
+export async function getNextSortOrder(podcastId: string): Promise<number> {
+  const existingEpisodes = await db
+    .select()
+    .from(episodesTable)
+    .where(eq(episodesTable.podcastId, podcastId))
+    .all();
+
+  if (existingEpisodes.length === 0) {
+    return 1;
+  }
+
+  const maxSortOrder = Math.max(...existingEpisodes.map((ep) => ep.sortOrder || 0));
+  return maxSortOrder + 1;
+}
+
+/**
+ * 文件上传时插入数据库记录
+ *
+ * @param params - 插入参数
+ * @returns 插入的剧集记录
+ *
+ * 说明：
+ * - 统一的数据库插入逻辑
+ * - 自动提取音频时长
+ * - 分配排序号
+ * - 本地和S3模式共用
+ */
+export async function insertEpisodeOnFileUpload(params: {
+  podcastId: string;
+  fileName: string;
+  fileSize: number;
+  title?: string;
+  description?: string | null;
+  pubDate?: Date;
+  coverUrl?: string | null;
+  duration?: number;
+}): Promise<{ id: string; sortOrder: number }> {
+  const {
+    podcastId,
+    fileName,
+    fileSize,
+    title,
+    description,
+    pubDate,
+    coverUrl,
+    duration,
+  } = params;
+
+  const episodeId = `${podcastId}:${fileName}`;
+  const storage = getStorage();
+  const filePath = `audio/${podcastId.split(':')[0]}/${podcastId.split(':')[1]}/${fileName}`;
+
+  // 提取音频时长（如果未提供）
+  let extractedDuration = duration;
+  if (extractedDuration === undefined || extractedDuration === null) {
+    try {
+      extractedDuration = await extractAudioDuration(storage, filePath);
+    } catch (error) {
+      console.warn(`[insertEpisodeOnFileUpload] 提取时长失败: ${fileName}`, error);
+      extractedDuration = 0;
+    }
+  }
+
+  // 获取下一个排序号
+  const sortOrder = await getNextSortOrder(podcastId);
+
+  // 生成标题（如果未提供）
+  const episodeTitle = title || fileName;
+
+  // 生成发布时间（如果未提供）
+  const episodePubDate = pubDate || new Date();
+
+  // 插入数据库
+  await db
+    .insert(episodesTable)
+    .values({
+      id: episodeId,
+      podcastId,
+      fileName,
+      title: episodeTitle,
+      description: description || null,
+      pubDate: episodePubDate,
+      coverUrl: coverUrl || null,
+      duration: extractedDuration,
+      fileSize,
+      version: 1,
+      sortOrder,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+  console.log(`[insertEpisodeOnFileUpload] 已插入剧集: ${fileName} (sortOrder: ${sortOrder})`);
+
+  return { id: episodeId, sortOrder };
 }

@@ -1,7 +1,5 @@
-import path from 'path';
 import { Episode, PodcastConfig, EpisodeNumberStrategy } from '../types';
 import crypto from 'crypto';
-import fs from 'fs';
 
 const BASE_DATE = new Date('2024-12-18T00:00:00.000Z');
 
@@ -312,12 +310,16 @@ function parseDateNumber(dateNumber: number): Date | null {
     return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
 }
 
-function getFileMetadata(filePath: string) {
-    const stats = fs.statSync(filePath);
+function getFileMetadata(stats: { createdAt: Date; modifiedAt: Date; size: number }) {
+    // 使用创建时间作为 pubDate
+    const pubDate = stats.createdAt;
+    // 生成排序值（基于时间戳和文件大小）
+    const sortValue = Math.floor(stats.createdAt.getTime() / 1000) * 10000 +
+        parseInt(String(stats.size).slice(0, 4));
+
     return {
-        pubDate: new Date(stats.ctimeMs),
-        sortValue: Math.floor(stats.ctimeMs / 1000) * 10000 +
-            parseInt(String(stats.size).slice(0, 4))
+        pubDate,
+        sortValue
     };
 }
 
@@ -356,9 +358,16 @@ function generateEpisodePubDate(params: {
     return metadataPubDate;
 }
 
+/**
+ * 创建剧集对象
+ * @param fileName 文件名
+ * @param fileStats 文件统计信息（来自 storage.getFileStats）
+ * @param config 播客配置
+ * @returns 剧集对象
+ */
 export function createEpisode(
     fileName: string,
-    dirPath: string,
+    fileStats: { createdAt: Date; modifiedAt: Date; size: number },
     config?: PodcastConfig
 ): Episode {
     const strategy = config?.episodeNumberStrategy || 'prefix';
@@ -369,8 +378,7 @@ export function createEpisode(
     // - 提取失败：保留完整文件名
     const title = parseEpisodeTitle(fileName, strategy, number);
 
-    const filePath = path.join(dirPath, fileName);
-    const { pubDate: metadataPubDate, sortValue } = getFileMetadata(filePath);
+    const { pubDate: metadataPubDate, sortValue } = getFileMetadata(fileStats);
 
     // 生成最终的发布日期
     const pubDate = generateEpisodePubDate({
@@ -387,7 +395,6 @@ export function createEpisode(
         number: finalNumber,
         title,
         fileName,
-        filePath,
         pubDate
     };
 }

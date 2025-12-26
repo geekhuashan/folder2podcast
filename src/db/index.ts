@@ -3,9 +3,25 @@ import { drizzle } from 'drizzle-orm/better-sqlite3';
 import * as schema from './schema';
 import path from 'path';
 import fs from 'fs-extra';
+import { getEnvConfig } from '../utils/env';
 
-// 数据库文件路径（可通过环境变量配置）
-const DB_PATH = process.env.DB_PATH || path.join(process.cwd(), 'data', 'podcasts.db');
+// 根据存储模式决定数据库文件路径
+// - 本地模式: data/podcasts-local.db
+// - S3 模式: data/podcasts-s3.db
+// 这样可以避免本地和 S3 数据混乱
+function getDatabasePath(): string {
+  if (process.env.DB_PATH) {
+    return process.env.DB_PATH;
+  }
+
+  const env = getEnvConfig();
+  const storageMode = env.STORAGE_MODE || 'local';
+  const dbFileName = `podcasts-${storageMode}.db`;
+
+  return path.join(process.cwd(), 'data', dbFileName);
+}
+
+const DB_PATH = getDatabasePath();
 
 // 确保数据目录存在
 fs.ensureDirSync(path.dirname(DB_PATH));
@@ -74,6 +90,8 @@ export async function initDatabase() {
       description TEXT,
       pub_date INTEGER,
       cover_url TEXT,
+      version INTEGER DEFAULT 1,
+      sort_order INTEGER,
       duration INTEGER,
       file_size INTEGER,
       created_at INTEGER DEFAULT (unixepoch()),

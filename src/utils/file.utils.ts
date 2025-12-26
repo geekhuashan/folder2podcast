@@ -1,5 +1,7 @@
 import path from 'path';
 import fs from 'fs-extra';
+import { getStorage } from '../services/storage';
+import type { IStorage } from '../services/storage';
 import { v4 as uuidv4 } from 'uuid';
 import { getEnvConfig } from './env';
 
@@ -133,8 +135,9 @@ export async function cleanupExpiredTempDirs(): Promise<void> {
 /**
  * 检测音频文件的封面图片
  *
+ * @param storage - 存储实例
  * @param audioFileName - 音频文件名（例如：episode001.mp3）
- * @param dirPath - 播客目录路径
+ * @param dirPath - 播客目录相对路径
  * @returns 封面文件名（相对于播客目录），如果不存在则返回 null
  *
  * 检测规则：
@@ -145,6 +148,7 @@ export async function cleanupExpiredTempDirs(): Promise<void> {
  * - [P01]1.以父之名.m4a → 查找 [P01]1.以父之名.jpg
  */
 export async function detectEpisodeCover(
+    storage: IStorage,
     audioFileName: string,
     dirPath: string
 ): Promise<string | null> {
@@ -157,10 +161,10 @@ export async function detectEpisodeCover(
     // 检测同名封面
     for (const ext of imageExtensions) {
         const coverFileName = `${audioBaseName}${ext}`;
-        const coverPath = path.join(dirPath, coverFileName);
+        const coverPath = `${dirPath}/${coverFileName}`;
 
         // 检查文件是否存在
-        if (await fs.pathExists(coverPath)) {
+        if (await storage.fileExists(coverPath)) {
             return coverFileName;
         }
     }
@@ -172,8 +176,9 @@ export async function detectEpisodeCover(
 /**
  * 检测播客的默认封面图片
  *
+ * @param storage - 存储实例
  * @param podcastDirName - 播客目录名
- * @param dirPath - 播客目录的完整路径
+ * @param dirPath - 播客目录的相对路径
  * @returns 封面文件名（相对于播客目录），如果不存在则返回 null
  *
  * 检测规则：
@@ -183,6 +188,7 @@ export async function detectEpisodeCover(
  * - 盲冢/ → 查找 cover.jpg 或 cover.png
  */
 export async function detectPodcastCover(
+    storage: IStorage,
     podcastDirName: string,
     dirPath: string
 ): Promise<string | null> {
@@ -192,10 +198,10 @@ export async function detectPodcastCover(
     // 查找 cover 文件
     for (const ext of imageExtensions) {
         const coverFileName = `cover${ext}`;
-        const coverPath = path.join(dirPath, coverFileName);
+        const coverPath = `${dirPath}/${coverFileName}`;
 
         // 检查文件是否存在
-        if (await fs.pathExists(coverPath)) {
+        if (await storage.fileExists(coverPath)) {
             return coverFileName;
         }
     }

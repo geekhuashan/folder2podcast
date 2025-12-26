@@ -6,11 +6,12 @@
  * - RSS Feed 生成必须调用此服务
  * - 确保所有地方看到的数据 100% 一致
  *
- * 工作流程：
- * 1. 扫描文件系统并同步到数据库（scanPodcastEpisodes）
- * 2. 从数据库读取最新数据
- * 3. 检测并填充封面 URL
- * 4. 返回标准化的数据结构
+ * 工作流程（已优化）：
+ * 1. 从数据库读取最新数据（文件操作时已实时更新）
+ * 2. 检测并填充封面 URL
+ * 3. 返回标准化的数据结构
+ *
+ * 注意：不再自动扫描文件系统，文件上传/下载时已直接更新数据库
  */
 
 import { db } from '../db';
@@ -19,11 +20,8 @@ import { eq } from 'drizzle-orm';
 import { scanPodcastEpisodes } from './podcast';
 import { getAudioUrl, getEpisodeCoverUrl, getPodcastCoverUrl } from '../utils/url';
 import { detectPodcastCover } from '../utils/file.utils';
-import { getEnvConfig } from '../utils/env';
+import { getStorage } from './storage';
 import { getBasePubDate, generatePubDatesForEpisodes } from '../utils/sortOrder';
-import path from 'path';
-
-const { AUDIO_DIR } = getEnvConfig();
 
 /**
  * 剧集数据（标准化格式）
@@ -91,15 +89,10 @@ export interface PodcastFeedData {
  * - 确保 Web API 和 RSS Feed 的数据完全一致
  */
 export async function generatePodcastFeedData(podcastId: string): Promise<PodcastFeedData> {
-  // 1. 扫描文件系统并同步到数据库
-  //    这一步确保：
-  //    - 新上传的文件被检测到
-  //    - episodes.json 的更新被读取
-  //    - 封面文件被自动检测
-  //    - 数据库中的剧集信息是最新的
-  await scanPodcastEpisodes(podcastId);
+  // ❌ 已取消自动扫描 - 文件操作时已直接更新数据库
+  // await scanPodcastEpisodes(podcastId);
 
-  // 2. 从数据库读取播客信息
+  // 1. 从数据库读取播客信息
   const podcast = await db
     .select()
     .from(podcasts)
@@ -135,21 +128,28 @@ export async function generatePodcastFeedData(podcastId: string): Promise<Podcas
   );
 
   // 5. 检测播客封面
+  const storage = getStorage();
   const [userId, dirName] = podcastId.split(':');
-  const podcastCoverFileName = await detectPodcastCover(dirName, path.join(AUDIO_DIR, userId, dirName));
+  const podcastPath = `audio/${userId}/${dirName}`;
+  const podcastCoverFileName = await detectPodcastCover(storage, dirName, podcastPath);
+
+  // ✅ 统一生成播客封面 URL（本地和S3使用相同格式）
   const podcastImageUrl = podcastCoverFileName
-    ? getPodcastCoverUrl(dirName)
+    ? getPodcastCoverUrl(userId, dirName)
     : null;
 
   // 6. 转换为标准化格式，填充完整的 URL
   const episodes: FeedEpisode[] = episodesWithPubDate.map((ep) => {
-    // 音频 URL
-    const audioUrl = getAudioUrl(dirName, ep.fileName);
+    // ✅ 统一生成音频 URL
+    const audioUrl = getAudioUrl(userId, dirName, ep.fileName);
 
-    // 剧集封面 URL：优先使用剧集自己的封面，否则 fallback 到播客封面
-    const imageUrl = ep.coverUrl
-      ? getEpisodeCoverUrl(dirName, ep.coverUrl)
-      : podcastImageUrl;
+    // ✅ 统一生成剧集封面 URL
+    let imageUrl: string | null = null;
+    if (ep.coverUrl) {
+      imageUrl = getEpisodeCoverUrl(userId, dirName, ep.coverUrl);
+    } else {
+      imageUrl = podcastImageUrl;
+    }
 
     return {
       id: ep.id,
@@ -178,14 +178,15 @@ export async function generatePodcastFeedData(podcastId: string): Promise<Podcas
     return bTime - aTime;  // 降序：最新的在前
   });
 
-  // ⭐ 8. 智能封面回退逻辑
+  // ⭐ 7. 智能封面回退逻辑
   // 如果播客没有封面，使用最新的有封面的剧集的封面作为播客封面
   let finalPodcastImageUrl = podcastImageUrl;
   if (!finalPodcastImageUrl && episodes.length > 0) {
     // 遍历已排序的剧集（最新的在前），找到第一个有封面的剧集
     const episodeWithCover = episodes.find(ep => ep.coverUrl);
     if (episodeWithCover) {
-      finalPodcastImageUrl = getEpisodeCoverUrl(dirName, episodeWithCover.coverUrl!);
+      // ✅ 统一生成剧集封面 URL
+      finalPodcastImageUrl = getEpisodeCoverUrl(userId, dirName, episodeWithCover.coverUrl!);
       console.log(`[智能封面] 播客 "${podcast.title}" 没有封面，使用剧集封面: ${episodeWithCover.fileName}`);
     }
   }

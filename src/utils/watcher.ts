@@ -1,6 +1,7 @@
 import chokidar from 'chokidar';
 import path from 'path';
 import { PodcastServer } from '../server';
+import { getStorage } from '../services/storage';
 
 function debounce<T extends (...args: any[]) => any>(
     fn: T,
@@ -39,18 +40,31 @@ function extractPodcastDirName(filePath: string, audioDir: string): string | und
 }
 
 export function watchFolderChanges(server: PodcastServer): void {
-    // 创建一个防抖的缓存清除函数
-    const debouncedClearCache = debounce((filePath: string) => {
+    // 检查存储模式
+    const storage = getStorage();
+    const storageType = storage.getStorageType();
+
+    // S3 模式下禁用文件监听（无文件系统）
+    if (storageType === 's3') {
+        console.log('[文件监听] S3 存储模式已启用，文件监听器已禁用');
+        console.log('[文件监听] 提示：S3 模式下，文件变化不会被自动检测。请手动触发播客扫描。');
+        return;
+    }
+
+    // 本地模式下启用文件监听（用于处理直接操作文件系统的情况）
+    console.log('[文件监听] 本地存储模式已启用，启动文件监听器...');
+    console.log('[文件监听] 提示：文件操作已通过 Web API 实时更新数据库，Watcher 仅用于记录日志。');
+
+    // 创建一个防抖的日志函数
+    const debouncedLog = debounce((filePath: string, action: string) => {
         const fileName = path.basename(filePath);
         const isConfigFile = fileName === 'podcast.json' || fileName === 'episodes.json';
 
         if (isConfigFile) {
-            console.log(`检测到配置文件变化: ${fileName}，清除相关缓存...`);
+            console.log(`[文件监听] 检测到配置文件${action}: ${fileName}`);
         } else {
-            console.log('检测到文件变化');
+            console.log(`[文件监听] 检测到文件${action}: ${fileName}`);
         }
-
-        // RSS Feed 会在下次访问时从数据库重新生成，无需主动清除缓存
     }, 1000);
 
     // 初始化 watcher
@@ -67,21 +81,21 @@ export function watchFolderChanges(server: PodcastServer): void {
         }
     });
 
-    // 监听所有可能的文件变化事件
+    // 监听所有可能的文件变化事件（仅记录日志）
     watcher
         .on('add', (filePath) => {
             console.log(`[WATCH] 文件被添加: ${filePath}`);
-            debouncedClearCache(filePath);
+            debouncedLog(filePath, '添加');
         })
         .on('change', (filePath) => {
             console.log(`[WATCH] 文件被修改: ${filePath}`);
-            debouncedClearCache(filePath);
+            debouncedLog(filePath, '修改');
         })
         .on('unlink', (filePath) => {
             console.log(`[WATCH] 文件被删除: ${filePath}`);
-            debouncedClearCache(filePath);
+            debouncedLog(filePath, '删除');
         })
         .on('error', error => console.log(`[WATCH] 错误: ${error}`));
 
-    console.log(`开始监听文件夹: ${server.audioDirectory}`);
+    console.log(`[文件监听] 开始监听文件夹: ${server.audioDirectory}`);
 }

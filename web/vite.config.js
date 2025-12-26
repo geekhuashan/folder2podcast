@@ -16,6 +16,10 @@ const BACKEND_URL = `http://${BACKEND_HOST}:${BACKEND_PORT}`;
 export default defineConfig({
   plugins: [solidPlugin()],
   base: '/web/',
+  // 定义全局常量，将后端 URL 传递给前端
+  define: {
+    __BACKEND_URL__: JSON.stringify(BACKEND_URL)
+  },
   server: {
     host: '0.0.0.0', // 允许外部访问
     port: parseInt(VITE_PORT),

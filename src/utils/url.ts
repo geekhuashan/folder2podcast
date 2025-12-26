@@ -7,9 +7,9 @@
  * 所有音频、封面、Feed 的 URL 生成都必须使用这个文件中的函数。
  * 确保前端、后端、RSS Feed 使用完全一致的 URL 格式。
  *
- * ## 文件存储 vs URL 访问的分离
+ * ## 统一架构（本地和S3完全一致）
  *
- * **文件存储路径**（物理磁盘）：
+ * **文件存储路径**（物理磁盘或S3）：
  * ```
  * audio/
  *   ├── {userId}/              # 用户隔离目录
@@ -19,30 +19,15 @@
  *   │   │   └── ep-xxx.jpg     # 剧集封面
  * ```
  *
- * **URL 访问路径**（公开 API）：
+ * **URL 访问路径**（完全统一）：
  * ```
- * /audio/{podcastName}/{fileName}
- * ```
- * 注意：URL 中不包含 userId，userId 在路由层处理
- *
- * ## 路由解析机制
- *
- * 服务器路由 (`src/routes/audio.routes.ts`) 定义为：
- * ```
- * GET /audio/:podcastName/:fileName
+ * /audio/{userId}/{podcastName}/{fileName}
  * ```
  *
- * 路由处理逻辑：
- * 1. 优先检查当前登录用户的文件：`audio/{currentUserId}/{podcastName}/{fileName}`
- * 2. 如果找不到，搜索所有用户的文件（用于 RSS Feed 公开访问）
- * 3. 维护用户隔离的同时允许公开访问
- *
- * ## 为什么要这样设计？
- *
- * 1. **用户隔离**：不同用户的播客在磁盘上物理隔离
- * 2. **简洁 URL**：RSS Feed 中的 URL 不暴露 userId，更简洁美观
- * 3. **灵活性**：路由层可以根据认证状态智能选择文件来源
- * 4. **一致性**：前端、RSS Feed、后端使用完全相同的 URL 格式
+ * **为什么统一？**
+ * - 本地模式：文件操作直接更新数据库，不再需要"智能匹配"路由
+ * - S3模式：URL必须是完整路径才能直接访问
+ * - 架构统一：代码中不再有 if-else 判断存储类型
  *
  * ## 相关文件
  *
@@ -55,12 +40,12 @@
  *
  * ```typescript
  * // 后端生成 RSS Feed
- * const audioUrl = getAudioUrl('我的播客', 'episode01.mp3');
- * // => http://example.com/audio/我的播客/episode01.mp3
+ * const audioUrl = getAudioUrl('admin', '我的播客', 'episode01.mp3');
+ * // => http://example.com/audio/admin/我的播客/episode01.mp3
  *
  * // 前端播放音频
- * const audioUrl = getAudioUrl(podcast.dirName, episode.fileName);
- * // => /audio/我的播客/episode01.mp3
+ * const audioUrl = getAudioUrl(podcast.userId, podcast.dirName, episode.fileName);
+ * // => /audio/admin/我的播客/episode01.mp3
  * ```
  *
  * ## 重要约定
@@ -72,45 +57,91 @@
  */
 
 import { getEnvConfig } from './env';
+import { getStorage } from '../services/storage';
 
-const { BASE_URL } = getEnvConfig();
+const { BASE_URL, S3_PUBLIC_URL, S3_BUCKET_PREFIX } = getEnvConfig();
 
 /**
  * 生成音频文件的公开访问 URL
  *
- * @param podcastDirName - 播客目录名（不含 userId）
+ * @param userId - 用户ID
+ * @param podcastDirName - 播客目录名
  * @param fileName - 音频文件名
  * @returns 完整的音频文件 URL
  *
- * 格式: {BASE_URL}/audio/{podcastDirName}/{fileName}
+ * S3 模式: {S3_PUBLIC_URL}/{S3_BUCKET_PREFIX}/audio/{userId}/{podcastDirName}/{fileName}
+ * 本地模式: {BASE_URL}/audio/{userId}/{podcastDirName}/{fileName}
  */
-export function getAudioUrl(podcastDirName: string, fileName: string): string {
-  return `${BASE_URL}/audio/${encodeURIComponent(podcastDirName)}/${encodeURIComponent(fileName)}`;
+export function getAudioUrl(userId: string, podcastDirName: string, fileName: string): string {
+  const storage = getStorage();
+  const storageType = storage.getStorageType();
+
+  // S3 模式：直接返回 S3 CDN URL（包含 bucket prefix）
+  if (storageType === 's3' && S3_PUBLIC_URL) {
+    const path = `audio/${userId}/${encodeURIComponent(podcastDirName)}/${encodeURIComponent(fileName)}`;
+    const url = S3_BUCKET_PREFIX
+      ? `${S3_PUBLIC_URL}/${S3_BUCKET_PREFIX}/${path}`
+      : `${S3_PUBLIC_URL}/${path}`;
+    return url;
+  }
+
+  // 本地模式：返回服务器 URL
+  return `${BASE_URL}/audio/${userId}/${encodeURIComponent(podcastDirName)}/${encodeURIComponent(fileName)}`;
 }
 
 /**
  * 生成播客封面的公开访问 URL
  *
- * @param podcastDirName - 播客目录名（不含 userId）
+ * @param userId - 用户ID
+ * @param podcastDirName - 播客目录名
  * @returns 完整的封面 URL
  *
- * 格式: {BASE_URL}/audio/{podcastDirName}/cover.jpg
+ * S3 模式: {S3_PUBLIC_URL}/{S3_BUCKET_PREFIX}/audio/{userId}/{podcastDirName}/cover.jpg
+ * 本地模式: {BASE_URL}/audio/{userId}/{podcastDirName}/cover.jpg
  */
-export function getPodcastCoverUrl(podcastDirName: string): string {
-  return `${BASE_URL}/audio/${encodeURIComponent(podcastDirName)}/cover.jpg`;
+export function getPodcastCoverUrl(userId: string, podcastDirName: string): string {
+  const storage = getStorage();
+  const storageType = storage.getStorageType();
+
+  // S3 模式：直接返回 S3 CDN URL（包含 bucket prefix）
+  if (storageType === 's3' && S3_PUBLIC_URL) {
+    const path = `audio/${userId}/${encodeURIComponent(podcastDirName)}/cover.jpg`;
+    const url = S3_BUCKET_PREFIX
+      ? `${S3_PUBLIC_URL}/${S3_BUCKET_PREFIX}/${path}`
+      : `${S3_PUBLIC_URL}/${path}`;
+    return url;
+  }
+
+  // 本地模式：返回服务器 URL
+  return `${BASE_URL}/audio/${userId}/${encodeURIComponent(podcastDirName)}/cover.jpg`;
 }
 
 /**
  * 生成剧集封面的公开访问 URL
  *
- * @param podcastDirName - 播客目录名（不含 userId）
+ * @param userId - 用户ID
+ * @param podcastDirName - 播客目录名
  * @param coverFileName - 封面文件名（例如: ep-xxx.jpg）
  * @returns 完整的封面 URL
  *
- * 格式: {BASE_URL}/audio/{podcastDirName}/{coverFileName}
+ * S3 模式: {S3_PUBLIC_URL}/{S3_BUCKET_PREFIX}/audio/{userId}/{podcastDirName}/{coverFileName}
+ * 本地模式: {BASE_URL}/audio/{userId}/{podcastDirName}/{coverFileName}
  */
-export function getEpisodeCoverUrl(podcastDirName: string, coverFileName: string): string {
-  return `${BASE_URL}/audio/${encodeURIComponent(podcastDirName)}/${encodeURIComponent(coverFileName)}`;
+export function getEpisodeCoverUrl(userId: string, podcastDirName: string, coverFileName: string): string {
+  const storage = getStorage();
+  const storageType = storage.getStorageType();
+
+  // S3 模式：直接返回 S3 CDN URL（包含 bucket prefix）
+  if (storageType === 's3' && S3_PUBLIC_URL) {
+    const path = `audio/${userId}/${encodeURIComponent(podcastDirName)}/${encodeURIComponent(coverFileName)}`;
+    const url = S3_BUCKET_PREFIX
+      ? `${S3_PUBLIC_URL}/${S3_BUCKET_PREFIX}/${path}`
+      : `${S3_PUBLIC_URL}/${path}`;
+    return url;
+  }
+
+  // 本地模式：返回服务器 URL
+  return `${BASE_URL}/audio/${userId}/${encodeURIComponent(podcastDirName)}/${encodeURIComponent(coverFileName)}`;
 }
 
 /**
@@ -128,25 +159,27 @@ export function getFeedUrl(podcastId: string): string {
 /**
  * 生成音频文件的相对路径（用于前端）
  *
- * @param podcastDirName - 播客目录名（不含 userId）
+ * @param userId - 用户ID
+ * @param podcastDirName - 播客目录名
  * @param fileName - 音频文件名
  * @returns 相对路径
  *
- * 格式: /audio/{podcastDirName}/{fileName}
+ * 格式: /audio/{userId}/{podcastDirName}/{fileName}
  */
-export function getAudioRelativePath(podcastDirName: string, fileName: string): string {
-  return `/audio/${encodeURIComponent(podcastDirName)}/${encodeURIComponent(fileName)}`;
+export function getAudioRelativePath(userId: string, podcastDirName: string, fileName: string): string {
+  return `/audio/${userId}/${encodeURIComponent(podcastDirName)}/${encodeURIComponent(fileName)}`;
 }
 
 /**
  * 生成封面文件的相对路径（用于前端）
  *
- * @param podcastDirName - 播客目录名（不含 userId）
+ * @param userId - 用户ID
+ * @param podcastDirName - 播客目录名
  * @param coverFileName - 封面文件名
  * @returns 相对路径
  *
- * 格式: /audio/{podcastDirName}/{coverFileName}
+ * 格式: /audio/{userId}/{podcastDirName}/{coverFileName}
  */
-export function getCoverRelativePath(podcastDirName: string, coverFileName: string): string {
-  return `/audio/${encodeURIComponent(podcastDirName)}/${encodeURIComponent(coverFileName)}`;
+export function getCoverRelativePath(userId: string, podcastDirName: string, coverFileName: string): string {
+  return `/audio/${userId}/${encodeURIComponent(podcastDirName)}/${encodeURIComponent(coverFileName)}`;
 }

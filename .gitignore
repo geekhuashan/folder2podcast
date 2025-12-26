@@ -19,4 +19,5 @@ CLAUDE.md
 openspec/*
 .claude/*
 
-data/*
+data/*server.log
+data/

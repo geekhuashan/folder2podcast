@@ -2,7 +2,6 @@ export interface Episode {
     number: number;
     title: string;
     fileName: string;
-    filePath: string;
     pubDate: Date;
     description?: string;     // 剧集描述（可选）
     imageUrl?: string;        // 剧集封面 URL（可选）

@@ -3,6 +3,9 @@ import fs from 'fs-extra';
 import { IDownloadAdapter, AudioFile } from '../../adapters/base/download-adapter.interface';
 import { TempFileManager } from './temp-file-manager.service';
 import { EpisodeMetadata } from '../../types';
+import { getStorage } from '../storage';
+import type { IStorage } from '../storage';
+import { insertEpisodeOnFileUpload } from '../podcast';
 
 /**
  * 统一下载请求接口
@@ -39,12 +42,12 @@ export interface UnifiedDownloadResponse {
 }
 
 /**
- * 下载管理器服务（重构版）
+ * 下载管理器服务（重构版 - 支持 S3 存储）
  *
  * 职责简化：
  * - 协调适配器和临时文件管理器
  * - 实现统一的下载流程
- * - 处理文件从临时目录到播客目录的移动
+ * - 处理文件从临时目录到播客目录的移动（支持本地和 S3）
  * - 保存适配器提供的元数据到 episodes.json
  *
  * 移除的职责：
@@ -55,10 +58,12 @@ export interface UnifiedDownloadResponse {
 export class DownloadManager {
     private readonly audioDir: string;
     private readonly tempFileManager: TempFileManager;
+    private readonly storage: IStorage;
 
-    constructor(audioDir: string, tempFileManager: TempFileManager) {
+    constructor(audioDir: string, tempFileManager: TempFileManager, storage?: IStorage) {
         this.audioDir = audioDir;
         this.tempFileManager = tempFileManager;
+        this.storage = storage || getStorage();
     }
 
     /**
@@ -109,8 +114,8 @@ export class DownloadManager {
             console.log(`[DownloadManager] 下载完成，共 ${downloadResult.audioFiles.length} 个文件`);
 
             // 3. 准备目标播客目录（包含用户隔离）
-            const podcastDir = path.join(this.audioDir, userId, podcastName);
-            await fs.ensureDir(podcastDir);
+            const podcastRelativePath = `audio/${userId}/${podcastName}`;
+            await this.storage.ensureDirectory(podcastRelativePath);
 
             // 4. 移动文件到播客目录并保存元数据
             console.log(`[DownloadManager] 移动文件到播客目录: ${podcastName}`);
@@ -119,21 +124,37 @@ export class DownloadManager {
             const episodesMetadata: Record<string, EpisodeMetadata> = {};
 
             for (const audioFile of downloadResult.audioFiles) {
-                // 4.1 移动音频文件
-                const targetAudioPath = path.join(podcastDir, audioFile.fileName);
-                await fs.move(audioFile.filePath, targetAudioPath, { overwrite: true });
+                // 4.1 移动音频文件（从本地临时目录读取，上传到存储）
+                const targetAudioPath = `${podcastRelativePath}/${audioFile.fileName}`;
+                const audioBuffer = await fs.readFile(audioFile.filePath);
+                await this.storage.saveFile(targetAudioPath, audioBuffer);
                 movedFilePaths.push(targetAudioPath);
 
                 // 4.2 移动封面文件（如果适配器下载了封面）
                 let coverFileName: string | undefined;
                 if (audioFile.coverPath) {
                     coverFileName = path.basename(audioFile.coverPath);
-                    const targetCoverPath = path.join(podcastDir, coverFileName);
-                    await fs.move(audioFile.coverPath, targetCoverPath, { overwrite: true });
+                    const targetCoverPath = `${podcastRelativePath}/${coverFileName}`;
+                    const coverBuffer = await fs.readFile(audioFile.coverPath);
+                    await this.storage.saveFile(targetCoverPath, coverBuffer);
                     console.log(`[DownloadManager] 封面已移动: ${coverFileName}`);
                 }
 
-                // 4.3 构建剧集元数据（直接使用适配器提供的数据）
+                // ✅ 4.3 直接插入数据库（不再依赖 episodes.json）
+                const podcastId = `${userId}:${podcastName}`;
+                const fileStats = await fs.stat(audioFile.filePath);
+
+                await insertEpisodeOnFileUpload({
+                    podcastId,
+                    fileName: audioFile.fileName,
+                    fileSize: fileStats.size,
+                    title: audioFile.title,
+                    description: audioFile.description,
+                    pubDate: audioFile.publishDate ? new Date(audioFile.publishDate) : undefined,
+                    coverUrl: coverFileName,
+                });
+
+                // 4.4 构建剧集元数据（用于 episodes.json 备份）
                 const metadata: EpisodeMetadata = {
                     title: audioFile.title,              // ✅ 适配器提供的标题
                     description: audioFile.description,  // ✅ 适配器提供的描述
@@ -156,7 +177,7 @@ export class DownloadManager {
 
             // 5. 保存 episodes.json（一次性写入所有元数据）
             if (Object.keys(episodesMetadata).length > 0) {
-                await this.saveEpisodesMetadata(podcastDir, episodesMetadata);
+                await this.saveEpisodesMetadata(podcastRelativePath, episodesMetadata);
                 console.log(`[DownloadManager] 已保存 ${Object.keys(episodesMetadata).length} 个剧集的元数据`);
             }
 
@@ -165,10 +186,8 @@ export class DownloadManager {
 
             console.log(`[DownloadManager] 任务 ${taskId} 完成`);
 
-            // 返回相对路径（相对于 audioDir）
-            const relativeFilePaths = movedFilePaths.map(filePath =>
-                path.relative(this.audioDir, filePath)
-            );
+            // 返回相对路径（标准格式）
+            const relativeFilePaths = movedFilePaths;
 
             return {
                 success: true,
@@ -198,21 +217,22 @@ export class DownloadManager {
     /**
      * 保存剧集元数据到 episodes.json
      *
-     * @param podcastDir - 播客目录
+     * @param podcastRelativePath - 播客目录相对路径（如 audio/userId/podcastName）
      * @param newMetadata - 新的剧集元数据
      */
     private async saveEpisodesMetadata(
-        podcastDir: string,
+        podcastRelativePath: string,
         newMetadata: Record<string, EpisodeMetadata>
     ): Promise<void> {
-        const episodesJsonPath = path.join(podcastDir, 'episodes.json');
+        const episodesJsonPath = `${podcastRelativePath}/episodes.json`;
 
         // 读取现有的 episodes.json（如果存在）
         let existingConfig: { episodes: Record<string, EpisodeMetadata> } = { episodes: {} };
 
-        if (await fs.pathExists(episodesJsonPath)) {
+        if (await this.storage.fileExists(episodesJsonPath)) {
             try {
-                const content = await fs.readFile(episodesJsonPath, 'utf-8');
+                const contentBuffer = await this.storage.readFile(episodesJsonPath);
+                const content = contentBuffer.toString('utf-8');
                 existingConfig = JSON.parse(content);
             } catch (error) {
                 console.warn(`[DownloadManager] 读取 episodes.json 失败，将创建新文件:`, error);
@@ -230,7 +250,8 @@ export class DownloadManager {
             episodes: mergedMetadata
         };
 
-        await fs.writeFile(episodesJsonPath, JSON.stringify(config, null, 2), 'utf-8');
+        const configJson = JSON.stringify(config, null, 2);
+        await this.storage.saveFile(episodesJsonPath, Buffer.from(configJson, 'utf-8'));
     }
 
     /**

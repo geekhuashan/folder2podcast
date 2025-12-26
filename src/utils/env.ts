@@ -38,6 +38,24 @@ export interface EnvConfig {
     HOST: string;
     // 管理 API 密钥（可选）
     API_KEY?: string;
+
+    // ========== S3 存储配置 ==========
+    // 存储模式：local=本地存储，s3=S3对象存储
+    STORAGE_MODE: 'local' | 's3';
+    // S3 端点地址（如七牛云：https://s3-cn-east-1.qiniucs.com）
+    S3_ENDPOINT?: string;
+    // S3 区域（默认 us-east-1）
+    S3_REGION?: string;
+    // S3 Bucket 名称
+    S3_BUCKET?: string;
+    // S3 访问密钥 ID
+    S3_ACCESS_KEY_ID?: string;
+    // S3 访问密钥
+    S3_SECRET_ACCESS_KEY?: string;
+    // S3 公开访问 URL（用于生成文件链接）
+    S3_PUBLIC_URL?: string;
+    // S3 Bucket 内路径前缀（可选，如 folder2podcast）
+    S3_BUCKET_PREFIX?: string;
 }
 
 /**
@@ -55,6 +73,9 @@ export function getEnvConfig(): EnvConfig {
     // BASE_URL 优先使用环境变量，否则根据 HOST 和 PORT 自动生成
     const baseUrl = process.env.BASE_URL || `http://${host}:${port}`;
 
+    // 存储模式，默认为 local
+    const storageMode = (process.env.STORAGE_MODE as 'local' | 's3') || 'local';
+
     return {
         // 音频文件夹路径，默认为当前目录下的 audio 文件夹
         AUDIO_DIR: process.env.AUDIO_DIR || defaultAudioDir,
@@ -67,6 +88,16 @@ export function getEnvConfig(): EnvConfig {
         // 服务器基础URL
         BASE_URL: baseUrl,
         // API 密钥（可选）
-        API_KEY: process.env.API_KEY
+        API_KEY: process.env.API_KEY,
+
+        // ========== S3 存储配置 ==========
+        STORAGE_MODE: storageMode,
+        S3_ENDPOINT: process.env.S3_ENDPOINT,
+        S3_REGION: process.env.S3_REGION,
+        S3_BUCKET: process.env.S3_BUCKET,
+        S3_ACCESS_KEY_ID: process.env.S3_ACCESS_KEY_ID,
+        S3_SECRET_ACCESS_KEY: process.env.S3_SECRET_ACCESS_KEY,
+        S3_PUBLIC_URL: process.env.S3_PUBLIC_URL,
+        S3_BUCKET_PREFIX: process.env.S3_BUCKET_PREFIX,
     };
 }

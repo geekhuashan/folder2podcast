@@ -26,7 +26,7 @@ import {
   markTaskFailed,
   uploadState,
 } from "../utils/uploadManager";
-import { getAudioUrl, getFullFeedUrl } from "../utils/url";
+import { getFullFeedUrl } from "../utils/url";
 
 // 复制到剪贴板功能
 const copyToClipboard = async (text) => {
@@ -98,12 +98,10 @@ export default function FileManager(props) {
     );
   });
 
-  // 选中文件的音频 URL
+  // 选中文件的音频 URL（直接使用后端提供的完整 URL）
   const selectedAudioUrl = createMemo(() => {
-    const fileName = selectedFileName();
-    if (!fileName) return null;
-    // ✅ 使用统一的 URL 生成函数
-    return getAudioUrl(props.podcast.dirName, fileName);
+    const episode = selectedEpisode();
+    return episode?.audioUrl || null;
   });
 
   // 复制 RSS 链接

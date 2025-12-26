@@ -18,14 +18,11 @@ import {
 import { generatePodcastFeedData } from "../services/feed-data.service";
 import { scanPodcastEpisodes } from "../services/podcast";
 import { getEpisodeCoverUrl } from "../utils/url";
+import { getStorage } from "../services/storage";
 import path from "path";
-import fs from "fs-extra";
-import { getEnvConfig } from "../utils/env";
 import { db } from "../db";
 import { episodes as episodesTable, podcasts } from "../db/schema";
 import { eq } from "drizzle-orm";
-
-const { AUDIO_DIR } = getEnvConfig();
 
 /**
  * 注册剧集路由
@@ -189,15 +186,15 @@ export async function registerEpisodesRoutes(server: FastifyInstance) {
         const imageExt = path.extname(data.filename);
         const coverFileName = `${audioBaseName}${imageExt}`;
 
-        // 目标路径
-        const podcastDir = path.join(AUDIO_DIR, userId, dirName);
-        const coverPath = path.join(podcastDir, coverFileName);
+        // 保存文件到存储
+        const storage = getStorage();
+        const coverRelativePath = `audio/${userId}/${dirName}/${coverFileName}`;
 
         // 确保目录存在
-        await fs.ensureDir(podcastDir);
+        await storage.ensureDirectory(`audio/${userId}/${dirName}`);
 
         // 保存文件
-        await fs.writeFile(coverPath, await data.toBuffer());
+        await storage.saveFile(coverRelativePath, await data.toBuffer());
 
         // 更新数据库
         const episodeId = `${id}:${decodedFileName}`;
@@ -209,7 +206,7 @@ export async function registerEpisodesRoutes(server: FastifyInstance) {
         return {
           success: true,
           coverFileName,
-          coverUrl: getEpisodeCoverUrl(dirName, coverFileName),
+          coverUrl: getEpisodeCoverUrl(userId, dirName, coverFileName),
         };
       } catch (error: any) {
         console.error("上传剧集封面失败:", error);
@@ -257,11 +254,11 @@ export async function registerEpisodesRoutes(server: FastifyInstance) {
         }
 
         // 删除封面文件
-        const podcastDir = path.join(AUDIO_DIR, userId, dirName);
-        const coverPath = path.join(podcastDir, episode.coverUrl);
+        const storage = getStorage();
+        const coverPath = `audio/${userId}/${dirName}/${episode.coverUrl}`;
 
-        if (await fs.pathExists(coverPath)) {
-          await fs.remove(coverPath);
+        if (await storage.fileExists(coverPath)) {
+          await storage.deleteFile(coverPath);
         }
 
         // 清除数据库中的 coverUrl

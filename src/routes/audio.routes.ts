@@ -3,15 +3,21 @@
  *
  * 职责：
  * - 处理音频文件和封面图片的访问请求
- * - 支持用户隔离（audio/{userId}/{podcastName}/{fileName}）
- * - 兼容公开访问（RSS Feed）
+ * - 统一路由格式：/audio/{userId}/{podcastName}/{fileName}
+ * - S3 模式：重定向到 S3 公开 URL
+ * - 本地模式：流式传输文件
+ *
+ * 注意：
+ * - 不再需要"智能匹配"，URL直接包含完整路径
+ * - 本地模式和S3模式使用完全相同的URL格式
  */
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import path from 'path';
-import fs from 'fs-extra';
-import { getEnvConfig } from '../utils/env';
-import { getCurrentUser } from '../utils/auth';
+import { getStorage } from '../services/storage';
+import { db } from '../db';
+import { podcasts } from '../db/schema';
+import { eq } from 'drizzle-orm';
 
 /**
  * 根据文件扩展名获取 MIME type
@@ -40,80 +46,73 @@ function getMimeType(fileName: string): string {
  * 注册音频文件访问路由
  */
 export async function registerAudioRoutes(server: FastifyInstance): Promise<void> {
-    const AUDIO_DIR = getEnvConfig().AUDIO_DIR;
+    const storage = getStorage();
+    const storageType = storage.getStorageType();
 
     /**
-     * GET /audio/:podcastName/:fileName
-     * 访问音频文件（支持用户隔离）
+     * GET /audio/:userId/:podcastName/:fileName
+     * 访问音频文件（统一格式）
      *
      * 路径解析逻辑：
-     * 1. 如果用户已登录，尝试访问 audio/{userId}/{podcastName}/{fileName}
-     * 2. 如果未登录或文件不存在，尝试访问所有用户的播客目录
-     * 3. 这样可以兼容 RSS Feed 的公开访问
+     * 1. URL 直接包含 userId，无需智能匹配
+     * 2. 验证播客是否存在
+     * 3. S3 模式：重定向到 S3 公开 URL
+     * 4. 本地模式：流式传输文件
      */
     server.get<{
         Params: {
+            userId: string;
             podcastName: string;
             fileName: string;
         };
     }>(
-        '/audio/:podcastName/:fileName',
-        async (request: FastifyRequest<{ Params: { podcastName: string; fileName: string } }>, reply: FastifyReply) => {
-            const { podcastName, fileName } = request.params;
+        '/audio/:userId/:podcastName/:fileName',
+        async (request: FastifyRequest<{ Params: { userId: string; podcastName: string; fileName: string } }>, reply: FastifyReply) => {
+            const { userId, podcastName, fileName } = request.params;
 
             try {
-                // 1. 优先尝试当前登录用户的文件
-                const user = getCurrentUser(request);
-                if (user) {
-                    const userFilePath = path.join(AUDIO_DIR, user.id, podcastName, fileName);
-                    if (await fs.pathExists(userFilePath)) {
-                        const fileStream = fs.createReadStream(userFilePath);
-                        const stat = await fs.stat(userFilePath);
+                // 1. 验证播客是否存在
+                const podcast = await db
+                    .select()
+                    .from(podcasts)
+                    .where(eq(podcasts.id, `${userId}:${podcastName}`))
+                    .get();
 
-                        // ✅ 根据文件扩展名动态设置 Content-Type
-                        reply.header('Content-Type', getMimeType(fileName));
-                        reply.header('Content-Length', stat.size);
-                        reply.header('Accept-Ranges', 'bytes');
-
-                        return reply.send(fileStream);
-                    }
+                if (!podcast) {
+                    return reply.code(404).send({
+                        message: `Podcast not found: ${podcastName}`,
+                        error: 'Not Found',
+                        statusCode: 404
+                    });
                 }
 
-                // 2. 如果用户文件不存在，尝试查找其他用户的文件（用于公开RSS Feed）
-                const audioDir = path.resolve(AUDIO_DIR);
-                const userDirs = await fs.readdir(audioDir);
+                // 2. 构建文件路径
+                const relativePath = `audio/${userId}/${podcastName}/${fileName}`;
 
-                for (const userDir of userDirs) {
-                    // 跳过隐藏文件和 .temp 目录
-                    if (userDir.startsWith('.')) continue;
-
-                    const candidatePath = path.join(audioDir, userDir, podcastName, fileName);
-                    if (await fs.pathExists(candidatePath)) {
-                        server.log.info({
-                            action: 'audio_file_access',
-                            podcastName,
-                            fileName,
-                            foundInUser: userDir
-                        }, '找到音频文件');
-
-                        const fileStream = fs.createReadStream(candidatePath);
-                        const stat = await fs.stat(candidatePath);
-
-                        // ✅ 根据文件扩展名动态设置 Content-Type
-                        reply.header('Content-Type', getMimeType(fileName));
-                        reply.header('Content-Length', stat.size);
-                        reply.header('Accept-Ranges', 'bytes');
-
-                        return reply.send(fileStream);
-                    }
+                // 3. 检查文件是否存在
+                if (!(await storage.fileExists(relativePath))) {
+                    return reply.code(404).send({
+                        message: `File not found: ${podcastName}/${fileName}`,
+                        error: 'Not Found',
+                        statusCode: 404
+                    });
                 }
 
-                // 3. 文件不存在
-                return reply.code(404).send({
-                    message: `Audio file not found: ${podcastName}/${fileName}`,
-                    error: 'Not Found',
-                    statusCode: 404
-                });
+                // 4. S3 模式：重定向到 S3 公开 URL
+                if (storageType === 's3') {
+                    const publicUrl = storage.getFileUrl(relativePath);
+                    return reply.redirect(302, publicUrl);
+                }
+
+                // 5. 本地模式：流式传输文件
+                const fileBuffer = await storage.readFile(relativePath);
+                const fileSize = fileBuffer.length;
+
+                reply.header('Content-Type', getMimeType(fileName));
+                reply.header('Content-Length', fileSize);
+                reply.header('Accept-Ranges', 'bytes');
+
+                return reply.send(fileBuffer);
 
             } catch (error: any) {
                 server.log.error({
