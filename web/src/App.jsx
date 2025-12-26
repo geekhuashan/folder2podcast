@@ -12,16 +12,18 @@ import ConfirmDialog from './components/ConfirmDialog';
 export default function App() {
   // ====== 认证状态 ======
   const [user, setUser] = createSignal(null);
-  const [isGuest, setIsGuest] = createSignal(false);
+  const [isGuest, setIsGuest] = createSignal(true); // 默认为游客模式
   const [authLoading, setAuthLoading] = createSignal(true);
+  const [showLoginModal, setShowLoginModal] = createSignal(false); // 登录弹窗
 
   // 检查登录状态
   onMount(async () => {
     try {
       const result = await authAPI.getCurrentUser();
       setUser(result.user);
+      setIsGuest(false); // 已登录则不是游客
     } catch {
-      // 未登录，显示登录页
+      // 未登录，保持游客模式
     } finally {
       setAuthLoading(false);
     }
@@ -31,18 +33,14 @@ export default function App() {
   const handleLoginSuccess = (userData) => {
     setUser(userData);
     setIsGuest(false);
-  };
-
-  // 处理访客模式
-  const handleGuestMode = () => {
-    setIsGuest(true);
+    setShowLoginModal(false);
   };
 
   // 处理登出
   const handleLogout = async () => {
     await authAPI.logout();
     setUser(null);
-    setIsGuest(false);
+    setIsGuest(true); // 登出后回到游客模式
   };
 
   // ====== 原有的状态 ======
@@ -87,13 +85,8 @@ export default function App() {
             </div>
           </Show>
 
-          {/* 未登录且非访客模式 - 显示登录页 */}
-          <Show when={!authLoading() && !user() && !isGuest()}>
-            <Login onLoginSuccess={handleLoginSuccess} onGuestMode={handleGuestMode} />
-          </Show>
-
-          {/* 已登录或访客模式 - 显示主界面 */}
-          <Show when={!authLoading() && (user() || isGuest())}>
+          {/* 主界面（默认显示，游客或已登录） */}
+          <Show when={!authLoading()}>
             <div style={{ display: 'flex', 'flex-direction': 'column', height: '100vh', background: '#f8fafc' }}>
               {/* 顶部导航栏 */}
               <header style={{
@@ -158,31 +151,33 @@ export default function App() {
                         </Show>
                       </button>
 
-                      {/* 设置 */}
-                      <button
-                        class={`nav-tab ${currentView() === 'settings' ? 'active' : ''}`}
-                        onClick={() => setCurrentView('settings')}
-                        style={{
-                          padding: '0.5rem 1rem',
-                          border: 'none',
-                          background: currentView() === 'settings' ? '#eff6ff' : 'transparent',
-                          color: currentView() === 'settings' ? '#3b82f6' : '#64748b',
-                          'border-radius': '0.5rem',
-                          cursor: 'pointer',
-                          'font-weight': '500',
-                          'font-size': '0.9375rem',
-                          transition: 'all 0.2s',
-                          display: 'flex',
-                          'align-items': 'center',
-                          gap: '0.5rem'
-                        }}
-                      >
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                          <circle cx="12" cy="12" r="3"/>
-                          <path d="M12 1v6m0 6v6M5.64 5.64l4.24 4.24m4.24 4.24l4.24 4.24M1 12h6m6 0h6M5.64 18.36l4.24-4.24m4.24-4.24l4.24-4.24"/>
-                        </svg>
-                        设置
-                      </button>
+                      {/* 设置（仅登录用户可见） */}
+                      <Show when={user()}>
+                        <button
+                          class={`nav-tab ${currentView() === 'settings' ? 'active' : ''}`}
+                          onClick={() => setCurrentView('settings')}
+                          style={{
+                            padding: '0.5rem 1rem',
+                            border: 'none',
+                            background: currentView() === 'settings' ? '#eff6ff' : 'transparent',
+                            color: currentView() === 'settings' ? '#3b82f6' : '#64748b',
+                            'border-radius': '0.5rem',
+                            cursor: 'pointer',
+                            'font-weight': '500',
+                            'font-size': '0.9375rem',
+                            transition: 'all 0.2s',
+                            display: 'flex',
+                            'align-items': 'center',
+                            gap: '0.5rem'
+                          }}
+                        >
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="3"/>
+                            <path d="M12 1v6m0 6v6M5.64 5.64l4.24 4.24m4.24 4.24l4.24 4.24M1 12h6m6 0h6M5.64 18.36l4.24-4.24m4.24-4.24l4.24-4.24"/>
+                          </svg>
+                          设置
+                        </button>
+                      </Show>
                     </Show>
 
                     {/* 显示当前播客时的面包屑 */}
@@ -217,76 +212,107 @@ export default function App() {
                   </nav>
                 </div>
 
-                {/* 右侧：用户信息 */}
+                {/* 右侧：用户信息 / 登录按钮 */}
                 <div style={{ display: 'flex', 'align-items': 'center', gap: '1rem', position: 'relative' }}>
-                  <button
-                    onClick={() => setShowUserMenu(!showUserMenu())}
-                    style={{
-                      display: 'flex',
-                      'align-items': 'center',
-                      gap: '0.75rem',
-                      padding: '0.5rem 1rem',
-                      border: '1px solid #e2e8f0',
-                      background: 'white',
-                      'border-radius': '0.5rem',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s'
-                    }}
-                  >
-                    <Show when={user()} fallback={
-                      <span style={{ 'font-size': '0.875rem', color: '#64748b' }}>👁️ 访客</span>
-                    }>
+                  {/* 游客模式：直接显示登录按钮 */}
+                  <Show when={!user()}>
+                    <button
+                      onClick={() => setShowLoginModal(true)}
+                      style={{
+                        display: 'flex',
+                        'align-items': 'center',
+                        gap: '0.5rem',
+                        padding: '0.5rem 1.25rem',
+                        background: '#3b82f6',
+                        color: 'white',
+                        border: 'none',
+                        'border-radius': '0.5rem',
+                        cursor: 'pointer',
+                        'font-weight': '500',
+                        'font-size': '0.9375rem',
+                        transition: 'all 0.2s',
+                        'box-shadow': '0 1px 3px 0 rgba(0, 0, 0, 0.1)'
+                      }}
+                      onMouseOver={(e) => e.currentTarget.style.background = '#2563eb'}
+                      onMouseOut={(e) => e.currentTarget.style.background = '#3b82f6'}
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+                        <polyline points="10 17 15 12 10 7"/>
+                        <line x1="15" y1="12" x2="3" y2="12"/>
+                      </svg>
+                      登录
+                    </button>
+                  </Show>
+
+                  {/* 已登录：显示用户菜单 */}
+                  <Show when={user()}>
+                    <button
+                      onClick={() => setShowUserMenu(!showUserMenu())}
+                      style={{
+                        display: 'flex',
+                        'align-items': 'center',
+                        gap: '0.75rem',
+                        padding: '0.5rem 1rem',
+                        border: '1px solid #e2e8f0',
+                        background: 'white',
+                        'border-radius': '0.5rem',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s'
+                      }}
+                    >
                       <span style={{ 'font-size': '0.875rem', color: '#1e293b', 'font-weight': '500' }}>
                         👤 {user().nickname || user().username}
                       </span>
-                    </Show>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <polyline points="6 9 12 15 18 9"/>
-                    </svg>
-                  </button>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="6 9 12 15 18 9"/>
+                      </svg>
+                    </button>
 
-                  {/* 下拉菜单 */}
-                  <Show when={showUserMenu()}>
-                    <div style={{
-                      position: 'absolute',
-                      top: '3.5rem',
-                      right: 0,
-                      background: 'white',
-                      border: '1px solid #e2e8f0',
-                      'border-radius': '0.5rem',
-                      'box-shadow': '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
-                      padding: '0.5rem',
-                      'min-width': '180px',
-                      'z-index': 50
-                    }}>
-                      <div style={{ padding: '0.75rem 1rem', 'border-bottom': '1px solid #e2e8f0' }}>
-                        <div style={{ 'font-size': '0.75rem', color: '#64748b', 'margin-bottom': '0.25rem' }}>版本</div>
-                        <div style={{ 'font-size': '0.875rem', color: '#1e293b' }}>v2.0.0</div>
+                    {/* 下拉菜单 */}
+                    <Show when={showUserMenu()}>
+                      <div style={{
+                        position: 'absolute',
+                        top: '3.5rem',
+                        right: 0,
+                        background: 'white',
+                        border: '1px solid #e2e8f0',
+                        'border-radius': '0.5rem',
+                        'box-shadow': '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                        padding: '0.5rem',
+                        'min-width': '180px',
+                        'z-index': 50
+                      }}>
+                        <div style={{ padding: '0.75rem 1rem', 'border-bottom': '1px solid #e2e8f0' }}>
+                          <div style={{ 'font-size': '0.75rem', color: '#64748b', 'margin-bottom': '0.25rem' }}>版本</div>
+                          <div style={{ 'font-size': '0.875rem', color: '#1e293b' }}>v2.0.0</div>
+                        </div>
+
+                        <button
+                          onClick={() => {
+                            setShowUserMenu(false);
+                            handleLogout();
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '0.75rem 1rem',
+                            border: 'none',
+                            background: 'transparent',
+                            'text-align': 'left',
+                            cursor: 'pointer',
+                            color: '#dc2626',
+                            'font-weight': '500',
+                            'font-size': '0.875rem',
+                            'border-radius': '0.375rem',
+                            transition: 'background 0.2s'
+                          }}
+                          onMouseOver={(e) => e.currentTarget.style.background = '#fee2e2'}
+                          onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
+                        >
+                          登出
+                        </button>
                       </div>
-                      <button
-                        onClick={() => {
-                          setShowUserMenu(false);
-                          handleLogout();
-                        }}
-                        style={{
-                          width: '100%',
-                          padding: '0.75rem 1rem',
-                          border: 'none',
-                          background: 'transparent',
-                          'text-align': 'left',
-                          cursor: 'pointer',
-                          color: '#dc2626',
-                          'font-weight': '500',
-                          'font-size': '0.875rem',
-                          'border-radius': '0.375rem',
-                          transition: 'background 0.2s'
-                        }}
-                        onMouseOver={(e) => e.currentTarget.style.background = '#fee2e2'}
-                        onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
-                      >
-                        {user() ? '登出' : '返回登录'}
-                      </button>
-                    </div>
+                    </Show>
                   </Show>
                 </div>
               </header>
@@ -303,7 +329,7 @@ export default function App() {
             <Show
               when={!selectedPodcast()}
               fallback={
-                <FileManager podcast={selectedPodcast()} onBack={handleBackToList} />
+                <FileManager podcast={selectedPodcast()} onBack={handleBackToList} isGuest={isGuest()} />
               }
             >
               {/* 播客管理页面 */}
@@ -344,6 +370,42 @@ export default function App() {
           </main>
 
           <FloatingTaskWindow />
+        </div>
+      </Show>
+
+      {/* 登录弹窗 */}
+      <Show when={showLoginModal()}>
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            'align-items': 'center',
+            'justify-content': 'center',
+            'z-index': 100
+          }}
+          onClick={() => setShowLoginModal(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'white',
+              'border-radius': '12px',
+              padding: '2rem',
+              'max-width': '400px',
+              width: '100%',
+              'box-shadow': '0 20px 25px -5px rgba(0, 0, 0, 0.1)'
+            }}
+          >
+            <Login
+              onLoginSuccess={handleLoginSuccess}
+              onClose={() => setShowLoginModal(false)}
+            />
+          </div>
         </div>
       </Show>
 

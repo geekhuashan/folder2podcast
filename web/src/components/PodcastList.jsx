@@ -1,10 +1,16 @@
-import { createSignal, createResource, For, Show, createEffect } from 'solid-js';
-import { podcastsAPI } from '../utils/api';
-import CreatePodcastModal from './CreatePodcastModal';
-import DownloadVideoModal from './DownloadVideoModal';
-import { useToast } from './Toast';
-import { useModal } from '../contexts/ModalContext';
-import { getFullFeedUrl } from '../utils/url';
+import {
+  createSignal,
+  createResource,
+  For,
+  Show,
+  createEffect,
+} from "solid-js";
+import { podcastsAPI } from "../utils/api";
+import CreatePodcastModal from "./CreatePodcastModal";
+import DownloadVideoModal from "./DownloadVideoModal";
+import { useToast } from "./Toast";
+import { useModal } from "../contexts/ModalContext";
+import { getFullFeedUrl } from "../utils/url";
 
 // 复制到剪贴板功能
 const copyToClipboard = async (text) => {
@@ -13,13 +19,13 @@ const copyToClipboard = async (text) => {
     return true;
   } catch (err) {
     // 降级方案
-    const textarea = document.createElement('textarea');
+    const textarea = document.createElement("textarea");
     textarea.value = text;
-    textarea.style.position = 'fixed';
-    textarea.style.opacity = '0';
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
     document.body.appendChild(textarea);
     textarea.select();
-    const success = document.execCommand('copy');
+    const success = document.execCommand("copy");
     document.body.removeChild(textarea);
     return success;
   }
@@ -67,25 +73,25 @@ export default function PodcastList(props) {
       setCopiedPodcast(podcast.dirName);
       setTimeout(() => setCopiedPodcast(null), 2000);
     } else {
-      toast.error('复制失败,请手动复制');
+      toast.error("复制失败,请手动复制");
     }
   };
 
   const handleDeleteClick = (podcast, e) => {
     e.stopPropagation(); // 阻止卡片点击事件
 
-    modal.open('confirm', {
-      title: '确认删除播客',
-      message: '此操作将删除播客及其所有文件，且无法恢复',
-      confirmText: '确认删除',
-      cancelText: '取消',
+    modal.open("confirm", {
+      title: "确认删除播客",
+      message: "此操作将删除播客及其所有文件，且无法恢复",
+      confirmText: "确认删除",
+      cancelText: "取消",
       danger: true,
       details: (
         <div>
-          <div style={{ 'font-weight': '600', 'margin-bottom': '0.25rem' }}>
+          <div style={{ "font-weight": "600", "margin-bottom": "0.25rem" }}>
             {podcast.title}
           </div>
-          <div style={{ 'font-size': '0.875rem', color: 'var(--text-muted)' }}>
+          <div style={{ "font-size": "0.875rem", color: "var(--text-muted)" }}>
             目录：{podcast.dirName} · {podcast.episodeCount} 集
           </div>
         </div>
@@ -98,7 +104,7 @@ export default function PodcastList(props) {
         } catch (error) {
           toast.error(`删除失败: ${error.message}`);
         }
-      }
+      },
     });
   };
 
@@ -109,23 +115,31 @@ export default function PodcastList(props) {
 
     // 从第一个文件的路径中提取文件夹名称
     const firstFile = files[0];
-    const pathParts = firstFile.webkitRelativePath.split('/');
+    const pathParts = firstFile.webkitRelativePath.split("/");
     const folderName = pathParts[0];
 
     if (!folderName) {
-      toast.error('无法获取文件夹名称');
+      toast.error("无法获取文件夹名称");
       return;
     }
 
     // 过滤出音频文件
-    const audioExtensions = ['.mp3', '.m4a', '.wav', '.aac', '.ogg', '.flac', '.wma'];
-    const audioFiles = files.filter(file => {
-      const ext = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
+    const audioExtensions = [
+      ".mp3",
+      ".m4a",
+      ".wav",
+      ".aac",
+      ".ogg",
+      ".flac",
+      ".wma",
+    ];
+    const audioFiles = files.filter((file) => {
+      const ext = file.name.toLowerCase().substring(file.name.lastIndexOf("."));
       return audioExtensions.includes(ext);
     });
 
     if (audioFiles.length === 0) {
-      toast.warning('所选文件夹中没有音频文件');
+      toast.warning("所选文件夹中没有音频文件");
       return;
     }
 
@@ -135,9 +149,9 @@ export default function PodcastList(props) {
       // 1. 使用文件夹名称自动生成播客目录名
       const dirName = folderName
         .toLowerCase()
-        .replace(/[\s]+/g, '-')
-        .replace(/[^\w\u4e00-\u9fa5-]/g, '')
-        .replace(/^-+|-+$/g, '')
+        .replace(/[\s]+/g, "-")
+        .replace(/[^\w\u4e00-\u9fa5-]/g, "")
+        .replace(/^-+|-+$/g, "")
         .substring(0, 50);
 
       // 2. 创建播客
@@ -151,8 +165,13 @@ export default function PodcastList(props) {
       toast.success(`播客创建成功，开始上传 ${audioFiles.length} 个音频文件`);
 
       // 3. 导入上传管理器
-      const { addUploadTask, markTaskUploading, updateTaskProgress, markTaskCompleted, markTaskFailed } =
-        await import('../utils/uploadManager');
+      const {
+        addUploadTask,
+        markTaskUploading,
+        updateTaskProgress,
+        markTaskCompleted,
+        markTaskFailed,
+      } = await import("../utils/uploadManager");
 
       // 4. 创建上传任务并开始上传
       for (const file of audioFiles) {
@@ -166,7 +185,7 @@ export default function PodcastList(props) {
             file,
             (loaded, total, percent) => {
               updateTaskProgress(taskId, percent);
-            }
+            },
           );
 
           markTaskCompleted(taskId);
@@ -176,14 +195,13 @@ export default function PodcastList(props) {
       }
 
       // 5. 刷新播客列表
-      toast.success('所有文件上传完成！');
+      toast.success("所有文件上传完成！");
       refetch();
-
     } catch (error) {
       toast.error(`创建播客失败: ${error.message}`);
     } finally {
       // 重置 input
-      event.target.value = '';
+      event.target.value = "";
       setUploading(false);
     }
   };
@@ -197,7 +215,7 @@ export default function PodcastList(props) {
         webkitdirectory=""
         directory=""
         multiple
-        style={{ display: 'none' }}
+        style={{ display: "none" }}
         onChange={handleFolderUpload}
         accept="audio/*"
       />
@@ -207,34 +225,56 @@ export default function PodcastList(props) {
           <div>
             <p class="eyebrow">Podcasts</p>
             <h2>播客列表</h2>
-            <p class="text-muted" style={{ 'max-width': '520px' }}>
-              <Show when={props.isGuest} fallback="为不同的音频专辑创建独立的目录。点击卡片可进入文件管理，以便上传音频、更新封面或编辑配置。">
+            <p class="text-muted" style={{ "max-width": "520px" }}>
+              <Show
+                when={props.isGuest}
+                fallback="为不同的音频专辑创建独立的目录。点击卡片可进入文件管理，以便上传音频、更新封面或编辑配置。"
+              >
                 浏览现有播客列表。访客模式下仅支持只读访问。
               </Show>
             </p>
           </div>
           <Show when={!props.isGuest}>
-            <div style={{ display: 'flex', gap: '0.75rem' }}>
+            <div style={{ display: "flex", gap: "0.75rem" }}>
               <button
                 class="btn btn-secondary"
                 onClick={() => folderInputRef?.click()}
                 disabled={uploading()}
-                style={{ cursor: uploading() ? 'wait' : 'pointer' }}
+                style={{ cursor: uploading() ? "wait" : "pointer" }}
               >
                 <Show when={uploading()} fallback="📁 上传文件夹">
-                  <div class="spinner" style={{ width: '1rem', height: '1rem', display: 'inline-block', 'margin-right': '0.5rem' }}></div>
+                  <div
+                    class="spinner"
+                    style={{
+                      width: "1rem",
+                      height: "1rem",
+                      display: "inline-block",
+                      "margin-right": "0.5rem",
+                    }}
+                  ></div>
                   上传中...
                 </Show>
               </button>
               <button
                 class="btn btn-secondary"
                 onClick={() => setShowDownloadModal(true)}
-                style={{ display: 'flex', 'align-items': 'center', gap: '0.5rem' }}
+                style={{
+                  display: "flex",
+                  "align-items": "center",
+                  gap: "0.5rem",
+                }}
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                  <polyline points="7 10 12 15 17 10"/>
-                  <line x1="12" y1="15" x2="12" y2="3"/>
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
                 </svg>
                 📥 下载视频
               </button>
@@ -251,17 +291,22 @@ export default function PodcastList(props) {
         <Show
           when={!podcasts.loading}
           fallback={
-            <div class="flex items-center justify-center" style={{ padding: '2.5rem 0' }}>
+            <div
+              class="flex items-center justify-center"
+              style={{ padding: "2.5rem 0" }}
+            >
               <div class="spinner"></div>
-              <span style={{ 'margin-left': '0.5rem' }}>正在获取播客...</span>
+              <span style={{ "margin-left": "0.5rem" }}>正在获取播客...</span>
             </div>
           }
         >
           <Show
             when={podcasts()?.data?.length > 0}
             fallback={
-              <div class="card" style={{ 'text-align': 'center' }}>
-                <p class="text-muted" style={{ 'margin-bottom': '0.5rem' }}>暂未创建任何播客</p>
+              <div class="card" style={{ "text-align": "center" }}>
+                <p class="text-muted" style={{ "margin-bottom": "0.5rem" }}>
+                  暂未创建任何播客
+                </p>
                 <p class="text-sm text-secondary">
                   点击右上角按钮立刻创建第一个播客目录。
                 </p>
@@ -272,7 +317,8 @@ export default function PodcastList(props) {
               <For each={podcasts()?.data || []}>
                 {(podcast) => {
                   // 判断是否需要高亮
-                  const isHighlighted = () => highlightedPodcast() === podcast.dirName;
+                  const isHighlighted = () =>
+                    highlightedPodcast() === podcast.dirName;
 
                   return (
                     <article
@@ -280,53 +326,75 @@ export default function PodcastList(props) {
                       onClick={() => props.onSelect(podcast)}
                       style={{
                         // 高亮动画
-                        animation: isHighlighted() ? 'highlight-pulse 0.8s ease-in-out 3' : 'none',
+                        animation: isHighlighted()
+                          ? "highlight-pulse 0.8s ease-in-out 3"
+                          : "none",
                         // 高亮时的边框颜色
-                        'border-color': isHighlighted() ? 'var(--primary)' : 'var(--border)',
+                        "border-color": isHighlighted()
+                          ? "var(--primary)"
+                          : "var(--border)",
                         // 平滑过渡
-                        transition: 'border-color 0.3s ease, box-shadow 0.3s ease'
+                        transition:
+                          "border-color 0.3s ease, box-shadow 0.3s ease",
                       }}
                     >
                       <div class="podcast-card__actions">
                         <div class="status-pill">
                           🎧 {podcast.episodeCount} 集
                         </div>
-                        <button
-                          class="btn-icon btn-danger"
-                          onClick={(e) => handleDeleteClick(podcast, e)}
-                          title="删除播客"
-                        >
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="3 6 5 6 21 6"/>
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                            <line x1="10" y1="11" x2="10" y2="17"/>
-                            <line x1="14" y1="11" x2="14" y2="17"/>
-                          </svg>
-                        </button>
+                        <Show when={!props.isGuest}>
+                          <button
+                            class="btn-icon btn-danger"
+                            onClick={(e) => handleDeleteClick(podcast, e)}
+                            title="删除播客"
+                          >
+                            <svg
+                              width="16"
+                              height="16"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                            >
+                              <polyline points="3 6 5 6 21 6" />
+                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                              <line x1="10" y1="11" x2="10" y2="17" />
+                              <line x1="14" y1="11" x2="14" y2="17" />
+                            </svg>
+                          </button>
+                        </Show>
                       </div>
                       <h3>{podcast.title}</h3>
                       <p>
-                        {podcast.description || '尚未填写描述，点击进入可在配置中完善。'}
+                        {podcast.description ||
+                          "尚未填写描述，点击进入可在配置中完善。"}
                       </p>
 
                       <div class="podcast-card__rss">
                         <div style={{ flex: 1 }}>
-                          <div class="text-sm text-muted" style={{ 'margin-bottom': '0.2rem' }}>
+                          <div
+                            class="text-sm text-muted"
+                            style={{ "margin-bottom": "0.2rem" }}
+                          >
                             RSS 订阅地址
                           </div>
-                          <div class="rss-chip">/feeds/{podcast.dirName}.xml</div>
+                          <div class="rss-chip">
+                            /feeds/{podcast.dirName}.xml
+                          </div>
                         </div>
                         <button
                           class="btn btn-soft btn-sm"
                           onClick={(e) => handleCopyRSS(podcast, e)}
                         >
-                          {copiedPodcast() === podcast.dirName ? '✓ 已复制' : '复制'}
+                          {copiedPodcast() === podcast.dirName
+                            ? "✓ 已复制"
+                            : "复制"}
                         </button>
                       </div>
 
                       <div class="card-footer">
                         <span>目录：{podcast.dirName}</span>
-                        <span style={{ color: 'var(--primary)' }}>管理 →</span>
+                        <span style={{ color: "var(--primary)" }}>管理 →</span>
                       </div>
                     </article>
                   );

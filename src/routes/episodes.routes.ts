@@ -8,19 +8,22 @@
  * - 支持权限检查
  */
 
-import { FastifyInstance } from 'fastify';
-import { requireAuth } from '../middleware/auth.middleware';
-import { getCurrentUser } from '../utils/auth';
-import { updateEpisodeMetadata, deleteEpisodeMetadata } from '../services/episode';
-import { generatePodcastFeedData } from '../services/feed-data.service';
-import { scanPodcastEpisodes } from '../services/podcast';
-import { getEpisodeCoverUrl } from '../utils/url';
-import path from 'path';
-import fs from 'fs-extra';
-import { getEnvConfig } from '../utils/env';
-import { db } from '../db';
-import { episodes as episodesTable, podcasts } from '../db/schema';
-import { eq } from 'drizzle-orm';
+import { FastifyInstance } from "fastify";
+import { requireAuth } from "../middleware/auth.middleware";
+import { getCurrentUser } from "../utils/auth";
+import {
+  updateEpisodeMetadata,
+  deleteEpisodeMetadata,
+} from "../services/episode";
+import { generatePodcastFeedData } from "../services/feed-data.service";
+import { scanPodcastEpisodes } from "../services/podcast";
+import { getEpisodeCoverUrl } from "../utils/url";
+import path from "path";
+import fs from "fs-extra";
+import { getEnvConfig } from "../utils/env";
+import { db } from "../db";
+import { episodes as episodesTable, podcasts } from "../db/schema";
+import { eq } from "drizzle-orm";
 
 const { AUDIO_DIR } = getEnvConfig();
 
@@ -33,13 +36,12 @@ export async function registerEpisodesRoutes(server: FastifyInstance) {
    * GET /api/podcasts/:id/episodes
    *
    * 说明：
-   * - 需要登录
+   * - 不需要登录（访客模式可访问）
    * - ✅ 调用统一数据源，确保与 RSS Feed 一致
    * - 返回包含自定义元数据的剧集列表
    */
   server.get<{ Params: { id: string } }>(
-    '/api/podcasts/:id/episodes',
-    { preHandler: requireAuth },
+    "/api/podcasts/:id/episodes",
     async (request, reply) => {
       try {
         const podcastId = request.params.id;
@@ -53,10 +55,12 @@ export async function registerEpisodesRoutes(server: FastifyInstance) {
           count: feedData.episodes.length,
         };
       } catch (error: any) {
-        console.error('[剧集路由] 获取剧集列表失败:', error);
-        return reply.code(500).send({ error: error.message || '获取剧集列表失败' });
+        console.error("[剧集路由] 获取剧集列表失败:", error);
+        return reply
+          .code(500)
+          .send({ error: error.message || "获取剧集列表失败" });
       }
-    }
+    },
   );
 
   /**
@@ -71,9 +75,15 @@ export async function registerEpisodesRoutes(server: FastifyInstance) {
    */
   server.patch<{
     Params: { id: string; fileName: string };
-    Body: { title?: string; description?: string; pubDate?: string; coverUrl?: string; sortOrder?: number };
+    Body: {
+      title?: string;
+      description?: string;
+      pubDate?: string;
+      coverUrl?: string;
+      sortOrder?: number;
+    };
   }>(
-    '/api/podcasts/:id/episodes/:fileName',
+    "/api/podcasts/:id/episodes/:fileName",
     { preHandler: requireAuth },
     async (request, reply) => {
       const user = getCurrentUser(request);
@@ -83,12 +93,17 @@ export async function registerEpisodesRoutes(server: FastifyInstance) {
       const decodedFileName = decodeURIComponent(fileName);
 
       try {
-        const updated = await updateEpisodeMetadata(id, decodedFileName, user.id, request.body);
+        const updated = await updateEpisodeMetadata(
+          id,
+          decodedFileName,
+          user.id,
+          request.body,
+        );
         return { data: updated };
       } catch (error: any) {
         return reply.code(403).send({ error: error.message });
       }
-    }
+    },
   );
 
   /**
@@ -101,7 +116,7 @@ export async function registerEpisodesRoutes(server: FastifyInstance) {
    * - 不删除音频文件，只清除数据库中的自定义字段
    */
   server.delete<{ Params: { id: string; fileName: string } }>(
-    '/api/podcasts/:id/episodes/:fileName',
+    "/api/podcasts/:id/episodes/:fileName",
     { preHandler: requireAuth },
     async (request, reply) => {
       const user = getCurrentUser(request);
@@ -116,7 +131,7 @@ export async function registerEpisodesRoutes(server: FastifyInstance) {
       } catch (error: any) {
         return reply.code(403).send({ error: error.message });
       }
-    }
+    },
   );
 
   /**
@@ -130,7 +145,7 @@ export async function registerEpisodesRoutes(server: FastifyInstance) {
    * - 更新数据库中的 coverUrl 字段
    */
   server.post<{ Params: { id: string; fileName: string } }>(
-    '/api/podcasts/:id/episodes/:fileName/cover',
+    "/api/podcasts/:id/episodes/:fileName/cover",
     { preHandler: requireAuth },
     async (request, reply) => {
       const user = getCurrentUser(request);
@@ -141,25 +156,36 @@ export async function registerEpisodesRoutes(server: FastifyInstance) {
         const decodedFileName = decodeURIComponent(fileName);
 
         // 解析 podcastId
-        const [userId, dirName] = id.split(':');
+        const [userId, dirName] = id.split(":");
         if (userId !== user.id) {
-          return reply.code(403).send({ error: '无权限操作此播客' });
+          return reply.code(403).send({ error: "无权限操作此播客" });
         }
 
         // 获取上传的文件
         const data = await request.file();
         if (!data) {
-          return reply.code(400).send({ error: '未找到上传的文件' });
+          return reply.code(400).send({ error: "未找到上传的文件" });
         }
 
         // 验证文件类型
-        const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+        const allowedMimeTypes = [
+          "image/jpeg",
+          "image/jpg",
+          "image/png",
+          "image/gif",
+          "image/webp",
+        ];
         if (!allowedMimeTypes.includes(data.mimetype)) {
-          return reply.code(400).send({ error: '不支持的图片格式，仅支持 JPG、PNG、GIF、WebP' });
+          return reply
+            .code(400)
+            .send({ error: "不支持的图片格式，仅支持 JPG、PNG、GIF、WebP" });
         }
 
         // 生成封面文件名: {音频文件名（不含扩展名）}.{图片扩展名}
-        const audioBaseName = path.basename(decodedFileName, path.extname(decodedFileName));
+        const audioBaseName = path.basename(
+          decodedFileName,
+          path.extname(decodedFileName),
+        );
         const imageExt = path.extname(data.filename);
         const coverFileName = `${audioBaseName}${imageExt}`;
 
@@ -183,13 +209,13 @@ export async function registerEpisodesRoutes(server: FastifyInstance) {
         return {
           success: true,
           coverFileName,
-          coverUrl: getEpisodeCoverUrl(dirName, coverFileName)
+          coverUrl: getEpisodeCoverUrl(dirName, coverFileName),
         };
       } catch (error: any) {
-        console.error('上传剧集封面失败:', error);
+        console.error("上传剧集封面失败:", error);
         return reply.code(500).send({ error: error.message });
       }
-    }
+    },
   );
 
   /**
@@ -202,7 +228,7 @@ export async function registerEpisodesRoutes(server: FastifyInstance) {
    * - 清除数据库中的 coverUrl 字段
    */
   server.delete<{ Params: { id: string; fileName: string } }>(
-    '/api/podcasts/:id/episodes/:fileName/cover',
+    "/api/podcasts/:id/episodes/:fileName/cover",
     { preHandler: requireAuth },
     async (request, reply) => {
       const user = getCurrentUser(request);
@@ -213,9 +239,9 @@ export async function registerEpisodesRoutes(server: FastifyInstance) {
         const decodedFileName = decodeURIComponent(fileName);
 
         // 解析 podcastId
-        const [userId, dirName] = id.split(':');
+        const [userId, dirName] = id.split(":");
         if (userId !== user.id) {
-          return reply.code(403).send({ error: '无权限操作此播客' });
+          return reply.code(403).send({ error: "无权限操作此播客" });
         }
 
         // 查询剧集信息
@@ -227,7 +253,7 @@ export async function registerEpisodesRoutes(server: FastifyInstance) {
           .get();
 
         if (!episode || !episode.coverUrl) {
-          return reply.code(404).send({ error: '剧集封面不存在' });
+          return reply.code(404).send({ error: "剧集封面不存在" });
         }
 
         // 删除封面文件
@@ -246,10 +272,10 @@ export async function registerEpisodesRoutes(server: FastifyInstance) {
 
         return { success: true };
       } catch (error: any) {
-        console.error('删除剧集封面失败:', error);
+        console.error("删除剧集封面失败:", error);
         return reply.code(500).send({ error: error.message });
       }
-    }
+    },
   );
 
   /**
@@ -266,7 +292,7 @@ export async function registerEpisodesRoutes(server: FastifyInstance) {
    * - 将旧内容推送到播客订阅的最前面
    */
   server.post<{ Params: { id: string; fileName: string } }>(
-    '/api/podcasts/:id/episodes/:fileName/republish',
+    "/api/podcasts/:id/episodes/:fileName/republish",
     { preHandler: requireAuth },
     async (request, reply) => {
       const user = getCurrentUser(request);
@@ -277,9 +303,9 @@ export async function registerEpisodesRoutes(server: FastifyInstance) {
         const decodedFileName = decodeURIComponent(fileName);
 
         // 解析 podcastId
-        const [userId, dirName] = id.split(':');
+        const [userId, dirName] = id.split(":");
         if (userId !== user.id) {
-          return reply.code(403).send({ error: '无权限操作此播客' });
+          return reply.code(403).send({ error: "无权限操作此播客" });
         }
 
         // 查询剧集信息
@@ -291,7 +317,7 @@ export async function registerEpisodesRoutes(server: FastifyInstance) {
           .get();
 
         if (!episode) {
-          return reply.code(404).send({ error: '剧集不存在' });
+          return reply.code(404).send({ error: "剧集不存在" });
         }
 
         // ⭐ 重新发布：version++ 并更新 pubDate
@@ -300,14 +326,16 @@ export async function registerEpisodesRoutes(server: FastifyInstance) {
           .update(episodesTable)
           .set({
             version: newVersion,
-            pubDate: new Date(),  // 设置为当前时间
+            pubDate: new Date(), // 设置为当前时间
             updatedAt: new Date(),
           })
           .where(eq(episodesTable.id, episodeId))
           .returning()
           .get();
 
-        console.log(`[重新发布] ${decodedFileName}: version ${episode.version || 1} → ${newVersion}`);
+        console.log(
+          `[重新发布] ${decodedFileName}: version ${episode.version || 1} → ${newVersion}`,
+        );
 
         return {
           success: true,
@@ -318,10 +346,10 @@ export async function registerEpisodesRoutes(server: FastifyInstance) {
           },
         };
       } catch (error: any) {
-        console.error('重新发布剧集失败:', error);
+        console.error("重新发布剧集失败:", error);
         return reply.code(500).send({ error: error.message });
       }
-    }
+    },
   );
 
   /**
@@ -335,7 +363,7 @@ export async function registerEpisodesRoutes(server: FastifyInstance) {
     Params: { id: string };
     Body: { strategy: string };
   }>(
-    '/api/podcasts/:id/episodes/reorder/preview',
+    "/api/podcasts/:id/episodes/reorder/preview",
     { preHandler: requireAuth },
     async (request, reply) => {
       try {
@@ -344,20 +372,24 @@ export async function registerEpisodesRoutes(server: FastifyInstance) {
         const user = getCurrentUser(request);
 
         // 验证策略参数
-        const validStrategies = ['prefix', 'suffix', 'first', 'last', 'date'];
+        const validStrategies = ["prefix", "suffix", "first", "last", "date"];
         if (!strategy || !validStrategies.includes(strategy)) {
           return reply.code(400).send({
-            error: `无效的排序策略。支持的策略: ${validStrategies.join(', ')}`,
+            error: `无效的排序策略。支持的策略: ${validStrategies.join(", ")}`,
           });
         }
 
         // 验证播客存在并检查权限
-        const podcast = await db.select().from(podcasts).where(eq(podcasts.id, podcastId)).get();
+        const podcast = await db
+          .select()
+          .from(podcasts)
+          .where(eq(podcasts.id, podcastId))
+          .get();
         if (!podcast) {
-          return reply.code(404).send({ error: '播客不存在' });
+          return reply.code(404).send({ error: "播客不存在" });
         }
         if (podcast.userId !== user.id) {
-          return reply.code(403).send({ error: '无权限操作此播客' });
+          return reply.code(403).send({ error: "无权限操作此播客" });
         }
 
         // 获取当前剧集列表（旧的 sortOrder）
@@ -368,11 +400,11 @@ export async function registerEpisodesRoutes(server: FastifyInstance) {
           .all();
 
         // 模拟使用新策略重新解析文件名序号
-        const { parseEpisodeNumber } = await import('../utils/episode');
+        const { parseEpisodeNumber } = await import("../utils/episode");
 
-        const previewEpisodes = currentEpisodes.map(ep => {
+        const previewEpisodes = currentEpisodes.map((ep) => {
           const newNumber = parseEpisodeNumber(ep.fileName, {
-            episodeNumberStrategy: strategy as any // ⚠️ 策略已在上面验证过有效性
+            episodeNumberStrategy: strategy as any, // ⚠️ 策略已在上面验证过有效性
           });
           return {
             fileName: ep.fileName,
@@ -384,7 +416,7 @@ export async function registerEpisodesRoutes(server: FastifyInstance) {
         });
 
         // 统计变化数量
-        const changedCount = previewEpisodes.filter(ep => ep.changed).length;
+        const changedCount = previewEpisodes.filter((ep) => ep.changed).length;
 
         return {
           success: true,
@@ -392,15 +424,17 @@ export async function registerEpisodesRoutes(server: FastifyInstance) {
             strategy,
             total: previewEpisodes.length,
             changed: changedCount,
-            episodes: previewEpisodes.sort((a, b) => (a.newSortOrder || 9999) - (b.newSortOrder || 9999)),
+            episodes: previewEpisodes.sort(
+              (a, b) => (a.newSortOrder || 9999) - (b.newSortOrder || 9999),
+            ),
             message: `使用 "${strategy}" 策略将影响 ${changedCount} 个剧集的排序`,
           },
         };
       } catch (error: any) {
-        console.error('预览重新排序失败:', error);
+        console.error("预览重新排序失败:", error);
         return reply.code(500).send({ error: error.message });
       }
-    }
+    },
   );
 
   /**
@@ -415,7 +449,7 @@ export async function registerEpisodesRoutes(server: FastifyInstance) {
     Params: { id: string };
     Body: { strategy: string };
   }>(
-    '/api/podcasts/:id/episodes/reorder',
+    "/api/podcasts/:id/episodes/reorder",
     { preHandler: requireAuth },
     async (request, reply) => {
       try {
@@ -424,20 +458,24 @@ export async function registerEpisodesRoutes(server: FastifyInstance) {
         const user = getCurrentUser(request);
 
         // 验证策略参数
-        const validStrategies = ['prefix', 'suffix', 'first', 'last', 'date'];
+        const validStrategies = ["prefix", "suffix", "first", "last", "date"];
         if (!strategy || !validStrategies.includes(strategy)) {
           return reply.code(400).send({
-            error: `无效的排序策略。支持的策略: ${validStrategies.join(', ')}`,
+            error: `无效的排序策略。支持的策略: ${validStrategies.join(", ")}`,
           });
         }
 
         // 验证播客存在并检查权限
-        const podcast = await db.select().from(podcasts).where(eq(podcasts.id, podcastId)).get();
+        const podcast = await db
+          .select()
+          .from(podcasts)
+          .where(eq(podcasts.id, podcastId))
+          .get();
         if (!podcast) {
-          return reply.code(404).send({ error: '播客不存在' });
+          return reply.code(404).send({ error: "播客不存在" });
         }
         if (podcast.userId !== user.id) {
-          return reply.code(403).send({ error: '无权限操作此播客' });
+          return reply.code(403).send({ error: "无权限操作此播客" });
         }
 
         console.log(`[批量重新排序] 播客: ${podcastId}, 策略: ${strategy}`);
@@ -475,9 +513,9 @@ export async function registerEpisodesRoutes(server: FastifyInstance) {
           },
         };
       } catch (error: any) {
-        console.error('批量重新排序失败:', error);
+        console.error("批量重新排序失败:", error);
         return reply.code(500).send({ error: error.message });
       }
-    }
+    },
   );
 }

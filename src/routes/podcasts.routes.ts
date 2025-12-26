@@ -8,17 +8,18 @@
  * - 支持多用户隔离
  */
 
-import { FastifyInstance } from 'fastify';
-import { requireAuth } from '../middleware/auth.middleware';
-import { getCurrentUser } from '../utils/auth';
+import { FastifyInstance } from "fastify";
+import { requireAuth } from "../middleware/auth.middleware";
+import { getCurrentUser } from "../utils/auth";
 import {
   getUserPodcasts,
+  getAllPodcasts,
   getPodcastById,
   createPodcast,
   updatePodcast,
   deletePodcast,
   scanPodcastEpisodes,
-} from '../services/podcast';
+} from "../services/podcast";
 
 /**
  * 注册播客路由
@@ -33,16 +34,27 @@ export async function registerPodcastsRoutes(server: FastifyInstance) {
    * - 如果已登录，返回当前用户的播客
    * - 如果未登录（访客模式），返回所有播客的只读列表
    */
-  server.get('/api/podcasts', async (request, reply) => {
+  server.get("/api/podcasts", async (request, reply) => {
     const user = getCurrentUser(request);
 
-    // 如果未登录（访客模式），返回所有播客
+    // 如果未登录（访客模式），返回所有播客（只读）
     if (!user) {
-      // TODO: 实现获取所有播客的逻辑
-      // 暂时返回空数组，避免访客看到所有用户的数据
+      const list = await getAllPodcasts();
+
       return {
-        data: [],
-        count: 0,
+        data: list.map((podcast) => ({
+          id: podcast.id,
+          dirName: podcast.dirName,
+          title: podcast.title,
+          description: podcast.description,
+          author: podcast.author,
+          language: podcast.language,
+          category: podcast.category,
+          episodeCount: podcast.episodeCount,
+          feedUrl: `/feeds/${encodeURIComponent(podcast.id)}.xml`,
+          createdAt: podcast.createdAt,
+        })),
+        count: list.length,
       };
     }
 
@@ -71,22 +83,20 @@ export async function registerPodcastsRoutes(server: FastifyInstance) {
    * GET /api/podcasts/:id
    *
    * 说明：
-   * - 需要登录
-   * - 只能查看自己的播客
+   * - 不需要登录（访客模式可访问）
+   * - 返回播客的详细信息
    */
   server.get<{ Params: { id: string } }>(
-    '/api/podcasts/:id',
-    { preHandler: requireAuth },
+    "/api/podcasts/:id",
     async (request, reply) => {
-      const user = getCurrentUser(request);
       const podcast = await getPodcastById(request.params.id);
 
-      if (!podcast || podcast.userId !== user.id) {
-        return reply.code(404).send({ error: '播客不存在' });
+      if (!podcast) {
+        return reply.code(404).send({ error: "播客不存在" });
       }
 
       return { data: podcast };
-    }
+    },
   );
 
   /**
@@ -98,24 +108,32 @@ export async function registerPodcastsRoutes(server: FastifyInstance) {
    * - 自动关联到当前用户
    * - 创建文件系统目录
    */
-  server.post<{ Body: { dirName: string; title: string; description?: string; author?: string } }>(
-    '/api/podcasts',
-    { preHandler: requireAuth },
-    async (request, reply) => {
-      const user = getCurrentUser(request);
-      const { dirName, title, description, author } = request.body;
+  server.post<{
+    Body: {
+      dirName: string;
+      title: string;
+      description?: string;
+      author?: string;
+    };
+  }>("/api/podcasts", { preHandler: requireAuth }, async (request, reply) => {
+    const user = getCurrentUser(request);
+    const { dirName, title, description, author } = request.body;
 
-      // 参数验证
-      if (!dirName || !title) {
-        return reply.code(400).send({ error: 'dirName 和 title 不能为空' });
-      }
-
-      // 创建播客
-      const podcast = await createPodcast(user.id, { dirName, title, description, author });
-
-      return { data: podcast };
+    // 参数验证
+    if (!dirName || !title) {
+      return reply.code(400).send({ error: "dirName 和 title 不能为空" });
     }
-  );
+
+    // 创建播客
+    const podcast = await createPodcast(user.id, {
+      dirName,
+      title,
+      description,
+      author,
+    });
+
+    return { data: podcast };
+  });
 
   /**
    * 更新播客配置
@@ -127,18 +145,22 @@ export async function registerPodcastsRoutes(server: FastifyInstance) {
    * - 支持部分更新
    */
   server.patch<{ Params: { id: string }; Body: any }>(
-    '/api/podcasts/:id',
+    "/api/podcasts/:id",
     { preHandler: requireAuth },
     async (request, reply) => {
       const user = getCurrentUser(request);
 
       try {
-        const updated = await updatePodcast(request.params.id, user.id, request.body as any);
+        const updated = await updatePodcast(
+          request.params.id,
+          user.id,
+          request.body as any,
+        );
         return { data: updated };
       } catch (error: any) {
         return reply.code(403).send({ error: error.message });
       }
-    }
+    },
   );
 
   /**
@@ -152,12 +174,15 @@ export async function registerPodcastsRoutes(server: FastifyInstance) {
    *   - true: 同时删除数据库记录和文件系统文件 (推荐)
    *   - false: 只删除数据库记录,保留文件系统文件
    */
-  server.delete<{ Params: { id: string }; Querystring: { deleteFiles?: string } }>(
-    '/api/podcasts/:id',
+  server.delete<{
+    Params: { id: string };
+    Querystring: { deleteFiles?: string };
+  }>(
+    "/api/podcasts/:id",
     { preHandler: requireAuth },
     async (request, reply) => {
       const user = getCurrentUser(request);
-      const deleteFiles = request.query.deleteFiles === 'true';
+      const deleteFiles = request.query.deleteFiles === "true";
 
       try {
         await deletePodcast(request.params.id, user.id, deleteFiles);
@@ -165,7 +190,7 @@ export async function registerPodcastsRoutes(server: FastifyInstance) {
       } catch (error: any) {
         return reply.code(403).send({ error: error.message });
       }
-    }
+    },
   );
 
   /**
@@ -178,7 +203,7 @@ export async function registerPodcastsRoutes(server: FastifyInstance) {
    * - 更新数据库中的剧集记录
    */
   server.post<{ Params: { id: string } }>(
-    '/api/podcasts/:id/scan',
+    "/api/podcasts/:id/scan",
     { preHandler: requireAuth },
     async (request, reply) => {
       try {
@@ -187,6 +212,6 @@ export async function registerPodcastsRoutes(server: FastifyInstance) {
       } catch (error: any) {
         return reply.code(400).send({ error: error.message });
       }
-    }
+    },
   );
 }
