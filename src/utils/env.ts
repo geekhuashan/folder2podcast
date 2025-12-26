@@ -30,8 +30,6 @@ export interface EnvConfig {
     AUDIO_DIR: string;
     // 服务器端口
     PORT: number;
-    // 全局标题显示策略：clean=清理后的标题，full=完整文件名
-    TITLE_FORMAT: 'clean' | 'full';
     // 服务器基础URL，用于生成RSS feed中的链接（不配置时自动生成）
     BASE_URL: string;
     // 主机名/IP地址（用于生成BASE_URL，默认localhost）
@@ -81,8 +79,6 @@ export function getEnvConfig(): EnvConfig {
         AUDIO_DIR: process.env.AUDIO_DIR || defaultAudioDir,
         // 服务器端口，默认3100
         PORT: port,
-        // 标题显示策略，默认为full（完整文件名，不含扩展名）
-        TITLE_FORMAT: (process.env.TITLE_FORMAT as 'clean' | 'full') || 'full',
         // 主机名/IP地址
         HOST: host,
         // 服务器基础URL

@@ -211,7 +211,6 @@ nano .env
 | `AUDIO_DIR`    | 音频文件根目录路径 | `./audio`                 | `/path/to/audiobooks`        |
 | `PORT`         | 服务器监听端口     | `3100`                    | `8080`                       |
 | `BASE_URL`     | 服务器基础URL      | `http://localhost:端口号` | `http://192.168.55.222:3100` |
-| `TITLE_FORMAT` | 剧集标题显示格式   | `full`                    | `clean` 或 `full`            |
 | `API_KEY`      | Management API 密钥（可选） | 无     | `your-secret-key`            |
 | `NODE_ENV`     | 运行环境          | `development`             | `production`                 |
 | `PUID`         | 音频文件夹所有者ID（Docker） | `1000`    | 运行 `id -u` 获取      |

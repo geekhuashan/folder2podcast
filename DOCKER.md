@@ -90,7 +90,6 @@ docker run -d \
 | `BASE_URL` | 是 | http://localhost:3100 | RSS feed 中的 URL 基础地址 |
 | `PUID` | 否 | 1000 | 运行用户 ID（避免权限问题） |
 | `PGID` | 否 | 1000 | 运行用户组 ID |
-| `TITLE_FORMAT` | 否 | - | 标题格式化策略（clean/keep） |
 
 ### BASE_URL 配置说明
 

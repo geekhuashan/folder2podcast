@@ -38,8 +38,6 @@ services:
       # 用户和组 ID（Mac/Linux 用户可以设置为当前用户）
       - PUID=1000
       - PGID=1000
-      # 可选：标题格式化策略
-      # - TITLE_FORMAT=clean
 
     # 重启策略
     restart: unless-stopped
