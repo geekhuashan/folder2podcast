@@ -154,7 +154,7 @@ export const podcastsAPI = {
       });
 
       // 发送请求
-      const url = addApiKey(`${API_BASE}/manage/podcasts/${encodeURIComponent(podcastDir)}/files`);
+      const url = addAuth(`${API_BASE}/manage/podcasts/${encodeURIComponent(podcastDir)}/files`);
       xhr.open('POST', url);
       xhr.send(formData);
     });
@@ -166,7 +166,7 @@ export const podcastsAPI = {
     formData.append('file', file);
 
     const response = await fetch(
-      addApiKey(`${API_BASE}/manage/podcasts/${encodeURIComponent(podcastDir)}/files`),
+      addAuth(`${API_BASE}/manage/podcasts/${encodeURIComponent(podcastDir)}/files`),
       {
         method: 'POST',
         body: formData,
@@ -270,7 +270,7 @@ export const episodesAPI = {
     formData.append('file', file);
 
     const response = await fetch(
-      addApiKey(`${API_BASE}/podcasts/${encodeURIComponent(podcastDir)}/episodes/${encodeURIComponent(fileName)}/cover`),
+      addAuth(`${API_BASE}/podcasts/${encodeURIComponent(podcastDir)}/episodes/${encodeURIComponent(fileName)}/cover`),
       {
         method: 'POST',
         body: formData,
