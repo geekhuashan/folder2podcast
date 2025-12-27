@@ -19,6 +19,7 @@ import {
   deletePodcast,
   scanPodcastEpisodes,
 } from "../services/podcast";
+import { getFeedUrl } from "../utils/url";
 
 /**
  * 注册播客路由
@@ -51,7 +52,7 @@ export async function registerPodcastsRoutes(server: FastifyInstance) {
           language: podcast.language,
           category: podcast.category,
           episodeCount: podcast.episodeCount,
-          feedUrl: `/feeds/${encodeURIComponent(podcast.id)}.xml`,
+          feedUrl: getFeedUrl(podcast.id),
           createdAt: podcast.createdAt,
         })),
         count: list.length,
@@ -71,7 +72,7 @@ export async function registerPodcastsRoutes(server: FastifyInstance) {
         language: podcast.language,
         category: podcast.category,
         episodeCount: podcast.episodeCount,
-        feedUrl: `/feeds/${encodeURIComponent(podcast.id)}.xml`,
+        feedUrl: getFeedUrl(podcast.id),
         createdAt: podcast.createdAt,
       })),
       count: list.length,

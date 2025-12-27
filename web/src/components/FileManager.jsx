@@ -26,7 +26,7 @@ import {
   markTaskFailed,
   uploadState,
 } from "../utils/uploadManager";
-import { getFullFeedUrl } from "../utils/url";
+// 移除 getFullFeedUrl 导入，后端已提供完整的 feedUrl
 
 // 复制到剪贴板功能
 const copyToClipboard = async (text) => {
@@ -106,8 +106,8 @@ export default function FileManager(props) {
 
   // 复制 RSS 链接
   const handleCopyRSS = async () => {
-    // ✅ 使用统一的 URL 生成函数
-    const rssUrl = getFullFeedUrl(props.podcast.id);
+    // ✅ 直接使用后端提供的完整 feedUrl
+    const rssUrl = props.podcast.feedUrl;
     const success = await copyToClipboard(rssUrl);
     if (success) {
       setRssCopied(true);

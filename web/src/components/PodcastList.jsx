@@ -10,7 +10,6 @@ import CreatePodcastModal from "./CreatePodcastModal";
 import DownloadVideoModal from "./DownloadVideoModal";
 import { useToast } from "./Toast";
 import { useModal } from "../contexts/ModalContext";
-import { getFullFeedUrl } from "../utils/url";
 
 // 复制到剪贴板功能
 const copyToClipboard = async (text) => {
@@ -66,8 +65,8 @@ export default function PodcastList(props) {
 
   const handleCopyRSS = async (podcast, e) => {
     e.stopPropagation(); // 阻止卡片点击事件
-    // ✅ 使用统一的 URL 生成函数
-    const rssUrl = getFullFeedUrl(podcast.id);
+    // ✅ 直接使用后端提供的完整 feedUrl
+    const rssUrl = podcast.feedUrl;
     const success = await copyToClipboard(rssUrl);
     if (success) {
       setCopiedPodcast(podcast.dirName);

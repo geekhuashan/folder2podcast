@@ -62,6 +62,17 @@ import { getStorage } from '../services/storage';
 const { BASE_URL, S3_PUBLIC_URL, S3_BUCKET_PREFIX } = getEnvConfig();
 
 /**
+ * 确保 URL 包含协议前缀
+ * 如果 URL 不以 http:// 或 https:// 开头，自动添加 http://
+ */
+function ensureProtocol(url: string): string {
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    return `http://${url}`;
+  }
+  return url;
+}
+
+/**
  * 生成音频文件的公开访问 URL
  *
  * @param userId - 用户ID
@@ -85,8 +96,9 @@ export function getAudioUrl(userId: string, podcastDirName: string, fileName: st
     return url;
   }
 
-  // 本地模式：返回服务器 URL
-  return `${BASE_URL}/audio/${userId}/${encodeURIComponent(podcastDirName)}/${encodeURIComponent(fileName)}`;
+  // 本地模式：返回服务器 URL（确保包含协议）
+  const baseUrl = ensureProtocol(BASE_URL);
+  return `${baseUrl}/audio/${userId}/${encodeURIComponent(podcastDirName)}/${encodeURIComponent(fileName)}`;
 }
 
 /**
@@ -112,8 +124,9 @@ export function getPodcastCoverUrl(userId: string, podcastDirName: string): stri
     return url;
   }
 
-  // 本地模式：返回服务器 URL
-  return `${BASE_URL}/audio/${userId}/${encodeURIComponent(podcastDirName)}/cover.jpg`;
+  // 本地模式：返回服务器 URL（确保包含协议）
+  const baseUrl = ensureProtocol(BASE_URL);
+  return `${baseUrl}/audio/${userId}/${encodeURIComponent(podcastDirName)}/cover.jpg`;
 }
 
 /**
@@ -140,8 +153,9 @@ export function getEpisodeCoverUrl(userId: string, podcastDirName: string, cover
     return url;
   }
 
-  // 本地模式：返回服务器 URL
-  return `${BASE_URL}/audio/${userId}/${encodeURIComponent(podcastDirName)}/${encodeURIComponent(coverFileName)}`;
+  // 本地模式：返回服务器 URL（确保包含协议）
+  const baseUrl = ensureProtocol(BASE_URL);
+  return `${baseUrl}/audio/${userId}/${encodeURIComponent(podcastDirName)}/${encodeURIComponent(coverFileName)}`;
 }
 
 /**
@@ -153,7 +167,12 @@ export function getEpisodeCoverUrl(userId: string, podcastDirName: string, cover
  * 格式: {BASE_URL}/feeds/{podcastId}.xml
  */
 export function getFeedUrl(podcastId: string): string {
-  return `${BASE_URL}/feeds/${encodeURIComponent(podcastId)}.xml`;
+  // 确保 BASE_URL 包含协议前缀
+  let baseUrl = BASE_URL;
+  if (!baseUrl.startsWith('http://') && !baseUrl.startsWith('https://')) {
+    baseUrl = `http://${baseUrl}`;
+  }
+  return `${baseUrl}/feeds/${encodeURIComponent(podcastId)}.xml`;
 }
 
 /**
