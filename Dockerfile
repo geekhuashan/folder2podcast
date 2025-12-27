@@ -61,7 +61,8 @@ RUN mkdir -p /podcasts /app/bin && chmod 755 /podcasts
 # 注意: bin 目录中应该包含对应平台的 BBDown 可执行文件
 # 命名格式: BBDown-linux-x64, BBDown-linux-arm64
 COPY bin/ ./bin/
-RUN chmod +x ./bin/* 2>/dev/null || true
+# 确保 BBDown 二进制文件有可执行权限
+RUN chmod +x ./bin/BBDown-* 2>/dev/null || true
 
 # 设置环境变量
 ENV NODE_ENV=production \
