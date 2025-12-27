@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import { PodcastServer } from './server';
 import { getEnvConfig } from './utils/env';
-import { watchFolderChanges } from './utils/watcher';
 
 
 async function main() {
@@ -30,9 +29,6 @@ async function main() {
 
         console.log(`正在启动服务器 (端口: ${config.PORT})...`);
         await server.start();
-
-        // 开始监听文件夹变化
-        watchFolderChanges(server);
 
     } catch (error) {
         console.error('致命错误:', error instanceof Error ? error.message : error);
