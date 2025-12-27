@@ -297,10 +297,10 @@ export default function DownloadVideoModal(props) {
           class="modal"
           onClick={(e) => e.stopPropagation()}
           style={{
-            width: videoInfo()?.isMultiPage ? '700px' : '580px',
+            width: videoInfo()?.isMultiPage ? '600px' : '500px',
             'max-width': '92vw',
             'max-height': '90vh',
-            overflow: 'hidden',
+            overflow: 'auto',
             position: 'relative',
             'border-radius': 'var(--radius-lg)',
             'box-shadow': '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
@@ -354,9 +354,9 @@ export default function DownloadVideoModal(props) {
             height: '100%',
             'max-height': '90vh',
           }}>
-            {/* 弹窗头部 - 渐变背景 */}
+            {/* 弹窗头部 - 紧凑版 */}
             <div style={{
-              padding: '1.75rem 2rem',
+              padding: '1rem 1.5rem',
               background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
               'border-radius': 'var(--radius-lg) var(--radius-lg) 0 0',
               display: 'flex',
@@ -364,25 +364,13 @@ export default function DownloadVideoModal(props) {
               'justify-content': 'space-between',
               'flex-shrink': 0,
             }}>
-              <div style={{ display: 'flex', 'align-items': 'center', gap: '0.75rem' }}>
-                <div style={{
-                  width: '40px',
-                  height: '40px',
-                  'border-radius': '12px',
-                  background: 'rgba(255, 255, 255, 0.2)',
-                  display: 'flex',
-                  'align-items': 'center',
-                  'justify-content': 'center',
-                  'font-size': '1.25rem',
-                }}>
-                  📥
-                </div>
+              <div style={{ display: 'flex', 'align-items': 'center', gap: '0.5rem' }}>
+                <span style={{ 'font-size': '1.125rem' }}>📥</span>
                 <h2 style={{
                   margin: 0,
-                  'font-size': '1.375rem',
+                  'font-size': '1rem',
                   'font-weight': '600',
                   color: 'white',
-                  'letter-spacing': '-0.02em',
                 }}>
                   下载视频
                 </h2>
@@ -392,9 +380,9 @@ export default function DownloadVideoModal(props) {
                 onClick={props.onClose}
                 disabled={fetchingInfo() || isSubmitting()}
                 style={{
-                  width: '36px',
-                  height: '36px',
-                  'border-radius': '10px',
+                  width: '28px',
+                  height: '28px',
+                  'border-radius': '6px',
                   border: 'none',
                   background: 'rgba(255, 255, 255, 0.15)',
                   color: 'white',
@@ -402,7 +390,7 @@ export default function DownloadVideoModal(props) {
                   display: 'flex',
                   'align-items': 'center',
                   'justify-content': 'center',
-                  'font-size': '1.25rem',
+                  'font-size': '1rem',
                   transition: 'all 0.2s',
                   opacity: (fetchingInfo() || isSubmitting()) ? 0.5 : 1,
                 }}
@@ -419,55 +407,47 @@ export default function DownloadVideoModal(props) {
               </button>
             </div>
 
-            {/* 弹窗内容区域 */}
+            {/* 弹窗内容区域 - 紧凑版 */}
             <div style={{
-              padding: '2rem',
-              'overflow-y': 'auto',
+              padding: '1rem 1.5rem',
               flex: 1,
             }}>
               <form onSubmit={handleSubmit} style={{
                 display: 'flex',
                 'flex-direction': 'column',
-                gap: '1.5rem'
+                gap: '1rem'
               }}>
-                {/* 视频链接输入 */}
-                <div>
-                  <label style={{
-                    display: 'block',
-                    'margin-bottom': '0.625rem',
-                    'font-size': '0.875rem',
-                    'font-weight': '600',
-                    color: 'var(--text)',
-                    'letter-spacing': '-0.01em',
-                  }}>
-                    视频链接
-                  </label>
-                  <input
-                    type="text"
-                    class="input"
-                    placeholder="BV1qt4y1X7TW 或完整 URL"
-                    value={url()}
-                    onInput={(e) => setUrl(e.target.value)}
-                    disabled={fetchingInfo() || isSubmitting()}
-                    style={{
-                      width: '100%',
-                      padding: '0.875rem 1rem',
-                      'border-radius': '12px',
-                      border: '2px solid #e5e7eb',
-                      'font-size': '0.9375rem',
-                      transition: 'all 0.2s',
-                      background: 'var(--surface)',
-                    }}
-                    onFocus={(e) => {
-                      e.target.style.borderColor = 'var(--accent)';
-                      e.target.style.boxShadow = '0 0 0 3px rgba(16, 185, 129, 0.1)';
-                    }}
-                    onBlur={(e) => {
-                      e.target.style.borderColor = '#e5e7eb';
-                      e.target.style.boxShadow = 'none';
-                    }}
-                  />
-                </div>
+                {/* 视频链接输入框 - 仅在未读取到视频信息时显示 */}
+                <Show when={!videoInfo()}>
+                  <div>
+                    <label style={{
+                      display: 'block',
+                      'margin-bottom': '0.5rem',
+                      'font-size': '0.8125rem',
+                      'font-weight': '600',
+                      color: 'var(--text)',
+                    }}>
+                      视频链接
+                    </label>
+                    <input
+                      type="text"
+                      class="input"
+                      placeholder="BV1qt4y1X7TW 或完整 URL"
+                      value={url()}
+                      onInput={(e) => setUrl(e.target.value)}
+                      disabled={fetchingInfo() || isSubmitting()}
+                      style={{
+                        width: '100%',
+                        padding: '0.625rem 0.875rem',
+                        'border-radius': '8px',
+                        border: '1px solid #e5e7eb',
+                        'font-size': '0.875rem',
+                        background: 'var(--surface)',
+                      }}
+                      autoFocus
+                    />
+                  </div>
+                </Show>
 
                 {/* 播客选择器（条件渲染） */}
                 <Show when={shouldShowPodcastSelector()}>
@@ -476,13 +456,12 @@ export default function DownloadVideoModal(props) {
                       display: 'flex',
                       'align-items': 'center',
                       'justify-content': 'space-between',
-                      'margin-bottom': '0.625rem',
+                      'margin-bottom': '0.5rem',
                     }}>
                       <label style={{
-                        'font-size': '0.875rem',
+                        'font-size': '0.8125rem',
                         'font-weight': '600',
                         color: 'var(--text)',
-                        'letter-spacing': '-0.01em',
                       }}>
                         目标播客
                       </label>
@@ -494,33 +473,16 @@ export default function DownloadVideoModal(props) {
                         }}
                         disabled={podcasts.loading || fetchingInfo() || isSubmitting()}
                         style={{
-                          padding: '0.5rem 0.875rem',
-                          'border-radius': '8px',
+                          padding: '0.25rem 0.5rem',
+                          'border-radius': '4px',
                           border: 'none',
                           background: 'var(--surface-soft)',
                           color: 'var(--text-muted)',
-                          'font-size': '0.8125rem',
-                          'font-weight': '500',
+                          'font-size': '0.75rem',
                           cursor: (podcasts.loading || fetchingInfo() || isSubmitting()) ? 'not-allowed' : 'pointer',
-                          display: 'flex',
-                          'align-items': 'center',
-                          gap: '0.375rem',
                           transition: 'all 0.2s',
                         }}
-                        onMouseEnter={(e) => {
-                          if (!podcasts.loading && !fetchingInfo() && !isSubmitting()) {
-                            e.target.style.background = '#e5e7eb';
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          e.target.style.background = 'var(--surface-soft)';
-                        }}
                       >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                          <polyline points="23 4 23 10 17 10"/>
-                          <polyline points="1 20 1 14 7 14"/>
-                          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-                        </svg>
                         刷新
                       </button>
                     </div>
@@ -531,10 +493,10 @@ export default function DownloadVideoModal(props) {
                       disabled={fetchingInfo() || isSubmitting() || podcasts.loading}
                       style={{
                         width: '100%',
-                        padding: '0.875rem 1rem',
-                        'border-radius': '12px',
-                        border: '2px solid #e5e7eb',
-                        'font-size': '0.9375rem',
+                        padding: '0.5rem 0.75rem',
+                        'border-radius': '8px',
+                        border: '1px solid #e5e7eb',
+                        'font-size': '0.875rem',
                         background: 'var(--surface)',
                         cursor: 'pointer',
                       }}
@@ -557,104 +519,84 @@ export default function DownloadVideoModal(props) {
                 <Show when={videoInfo()}>
                   {(info) => (
                     <div style={{
-                      padding: '1.5rem',
+                      padding: '0.75rem 1rem',
                       background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)',
-                      'border-radius': '16px',
+                      'border-radius': '8px',
                       border: '1px solid #bae6fd',
-                      'box-shadow': '0 4px 12px rgba(14, 165, 233, 0.08)',
                     }}>
-                      {/* 视频基本信息 */}
-                      <div style={{ 'margin-bottom': info().isMultiPage ? '1.25rem' : 0 }}>
+                      {/* 视频基本信息 - 紧凑版 */}
+                      <div style={{ 'margin-bottom': info().isMultiPage ? '0.75rem' : 0 }}>
                         <div style={{
                           display: 'flex',
                           'align-items': 'flex-start',
-                          gap: '0.875rem',
-                          'margin-bottom': '0.75rem',
+                          gap: '0.5rem',
+                          'margin-bottom': '0.5rem',
                         }}>
-                          <div style={{
-                            width: '36px',
-                            height: '36px',
-                            'border-radius': '10px',
-                            background: 'linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)',
-                            display: 'flex',
-                            'align-items': 'center',
-                            'justify-content': 'center',
-                            'flex-shrink': 0,
-                          }}>
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5">
-                              <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
-                              <path d="M16 3h4v4M8 3H4v4"/>
-                            </svg>
-                          </div>
+                          <span style={{ 'font-size': '1rem', 'flex-shrink': 0 }}>📺</span>
                           <div style={{ flex: 1, 'min-width': 0 }}>
                             <h3 style={{
                               margin: 0,
-                              'font-size': '1.0625rem',
+                              'font-size': '0.875rem',
                               'font-weight': '600',
                               color: '#0c4a6e',
-                              'line-height': '1.4',
-                              'letter-spacing': '-0.01em',
+                              'line-height': '1.3',
                             }}>
                               {info().title}
                             </h3>
                             <Show when={info().author}>
                               <p style={{
-                                margin: '0.375rem 0 0',
-                                'font-size': '0.875rem',
+                                margin: '0.25rem 0 0',
+                                'font-size': '0.75rem',
                                 color: '#0369a1',
-                                display: 'flex',
-                                'align-items': 'center',
-                                gap: '0.375rem',
                               }}>
-                                <span style={{ opacity: 0.7 }}>UP主:</span>
-                                <span style={{ 'font-weight': '500' }}>{info().author}</span>
+                                UP: {info().author}
                               </p>
                             </Show>
                           </div>
                         </div>
                       </div>
 
-                      {/* 分P选择 */}
+                      {/* 分P选择 - 紧凑版 */}
                       <Show when={info().isMultiPage}>
                         <div style={{
-                          padding: '1.25rem',
+                          padding: '0.75rem',
                           background: 'white',
-                          'border-radius': '12px',
+                          'border-radius': '6px',
                           border: '1px solid rgba(186, 230, 253, 0.5)',
                         }}>
                           <div style={{
                             display: 'flex',
                             'justify-content': 'space-between',
                             'align-items': 'center',
-                            'margin-bottom': '1rem',
+                            'margin-bottom': '0.5rem',
                             'flex-wrap': 'wrap',
-                            gap: '0.75rem',
+                            gap: '0.5rem',
                           }}>
                             <div style={{
-                              'font-size': '0.875rem',
+                              'font-size': '0.8125rem',
                               'font-weight': '600',
                               color: '#0c4a6e',
                             }}>
-                              选择要下载的分P ({selectedPages().length} / {info().pages.length})
+                              选择分P ({selectedPages().length}/{info().pages.length})
                             </div>
-                            <div style={{ display: 'flex', gap: '0.5rem', 'flex-wrap': 'wrap' }}>
+                            <div style={{ display: 'flex', gap: '0.375rem', 'flex-wrap': 'wrap' }}>
                               <button
                                 type="button"
                                 onClick={toggleSelectAll}
                                 disabled={fetchingInfo() || isSubmitting()}
                                 style={{
-                                  padding: '0.5rem 0.875rem',
-                                  'border-radius': '8px',
+                                  padding: '0.25rem 0.5rem',
+                                  'border-radius': '4px',
                                   border: 'none',
-                                  background: selectedPages().length === info().pages.length ? '#dbeafe' : 'var(--surface-soft)',
-                                  color: selectedPages().length === info().pages.length ? '#0369a1' : 'var(--text-muted)',
-                                  'font-size': '0.8125rem',
+                                  background: selectedPages().length === info().pages.length ? '#dbeafe' : '#f1f5f9',
+                                  color: selectedPages().length === info().pages.length ? '#0369a1' : '#64748b',
+                                  'font-size': '0.75rem',
                                   'font-weight': '500',
                                   cursor: (fetchingInfo() || isSubmitting()) ? 'not-allowed' : 'pointer',
                                   transition: 'all 0.2s',
                                 }}
                               >
-                                {selectedPages().length === info().pages.length ? '取消全选' : '全选'}
+                                {selectedPages().length === info().pages.length ? '取消' : '全选'}
                               </button>
                               <Show when={info().pages.length > 10}>
                                 <button
@@ -662,65 +604,62 @@ export default function DownloadVideoModal(props) {
                                   onClick={selectFirst10}
                                   disabled={fetchingInfo() || isSubmitting()}
                                   style={{
-                                    padding: '0.5rem 0.875rem',
-                                    'border-radius': '8px',
+                                    padding: '0.25rem 0.5rem',
+                                    'border-radius': '4px',
                                     border: 'none',
-                                    background: 'var(--surface-soft)',
-                                    color: 'var(--text-muted)',
-                                    'font-size': '0.8125rem',
+                                    background: '#f1f5f9',
+                                    color: '#64748b',
+                                    'font-size': '0.75rem',
                                     'font-weight': '500',
                                     cursor: (fetchingInfo() || isSubmitting()) ? 'not-allowed' : 'pointer',
                                     transition: 'all 0.2s',
                                   }}
                                 >
-                                  前10集
+                                  前10
                                 </button>
                                 <button
                                   type="button"
                                   onClick={selectLast10}
                                   disabled={fetchingInfo() || isSubmitting()}
                                   style={{
-                                    padding: '0.5rem 0.875rem',
-                                    'border-radius': '8px',
+                                    padding: '0.25rem 0.5rem',
+                                    'border-radius': '4px',
                                     border: 'none',
-                                    background: 'var(--surface-soft)',
-                                    color: 'var(--text-muted)',
-                                    'font-size': '0.8125rem',
+                                    background: '#f1f5f9',
+                                    color: '#64748b',
+                                    'font-size': '0.75rem',
                                     'font-weight': '500',
                                     cursor: (fetchingInfo() || isSubmitting()) ? 'not-allowed' : 'pointer',
                                     transition: 'all 0.2s',
                                   }}
                                 >
-                                  后10集
+                                  后10
                                 </button>
                               </Show>
                             </div>
                           </div>
 
-                          {/* 分P列表 */}
+                          {/* 分P列表 - 紧凑版 */}
                           <div style={{
                             display: 'grid',
-                            'grid-template-columns': 'repeat(auto-fill, minmax(240px, 1fr))',
-                            gap: '0.625rem',
-                            'max-height': '320px',
-                            'overflow-y': 'auto',
-                            padding: '0.5rem',
+                            'grid-template-columns': 'repeat(auto-fill, minmax(140px, 1fr))',
+                            gap: '0.375rem',
+                            padding: '0.375rem',
                           }}>
                             <For each={info().pages}>
                               {(page) => (
                                 <label style={{
                                   display: 'flex',
                                   'align-items': 'center',
-                                  gap: '0.75rem',
-                                  padding: '0.875rem 1rem',
-                                  'border-radius': '10px',
-                                  border: '2px solid',
+                                  gap: '0.5rem',
+                                  padding: '0.5rem 0.625rem',
+                                  'border-radius': '6px',
+                                  border: '1px solid',
                                   'border-color': selectedPages().includes(page.index) ? '#0ea5e9' : '#e5e7eb',
                                   background: selectedPages().includes(page.index) ? '#f0f9ff' : 'white',
                                   cursor: (fetchingInfo() || isSubmitting()) ? 'not-allowed' : 'pointer',
                                   opacity: (fetchingInfo() || isSubmitting()) ? 0.6 : 1,
                                   transition: 'all 0.15s ease',
-                                  'box-shadow': selectedPages().includes(page.index) ? '0 2px 8px rgba(14, 165, 233, 0.15)' : 'none',
                                 }}
                                 onMouseEnter={(e) => {
                                   if (!fetchingInfo() && !isSubmitting() && !selectedPages().includes(page.index)) {
@@ -741,8 +680,8 @@ export default function DownloadVideoModal(props) {
                                     onChange={() => togglePage(page.index)}
                                     disabled={fetchingInfo() || isSubmitting()}
                                     style={{
-                                      width: '18px',
-                                      height: '18px',
+                                      width: '14px',
+                                      height: '14px',
                                       cursor: (fetchingInfo() || isSubmitting()) ? 'not-allowed' : 'pointer',
                                       'flex-shrink': 0,
                                       'accent-color': '#0ea5e9',
@@ -750,23 +689,23 @@ export default function DownloadVideoModal(props) {
                                   />
                                   <div style={{ flex: 1, 'min-width': 0 }}>
                                     <div style={{
-                                      'font-size': '0.875rem',
+                                      'font-size': '0.75rem',
                                       'font-weight': '500',
                                       color: selectedPages().includes(page.index) ? '#0369a1' : 'var(--text)',
                                       overflow: 'hidden',
                                       'text-overflow': 'ellipsis',
                                       'white-space': 'nowrap',
-                                      'line-height': '1.4',
+                                      'line-height': '1.3',
                                     }}>
                                       P{page.index}: {page.title}
                                     </div>
                                     <Show when={page.duration}>
                                       <div style={{
-                                        'font-size': '0.75rem',
+                                        'font-size': '0.6875rem',
                                         color: '#64748b',
-                                        'margin-top': '0.25rem',
+                                        'margin-top': '0.125rem',
                                       }}>
-                                        时长: {formatDuration(page.duration)}
+                                        {formatDuration(page.duration)}
                                       </div>
                                     </Show>
                                   </div>
@@ -782,14 +721,14 @@ export default function DownloadVideoModal(props) {
               </form>
             </div>
 
-            {/* 弹窗底部 - 固定按钮 */}
+            {/* 弹窗底部 - 紧凑版 */}
             <div style={{
-              padding: '1.5rem 2rem',
+              padding: '0.75rem 1.5rem',
               'border-top': '1px solid #e5e7eb',
               background: 'white',
               'border-radius': '0 0 var(--radius-lg) var(--radius-lg)',
               display: 'flex',
-              gap: '0.875rem',
+              gap: '0.625rem',
               'flex-shrink': 0,
             }}>
               <button
@@ -798,12 +737,12 @@ export default function DownloadVideoModal(props) {
                 disabled={fetchingInfo() || isSubmitting()}
                 style={{
                   flex: 1,
-                  padding: '0.875rem 1.5rem',
-                  'border-radius': '12px',
+                  padding: '0.5rem 1rem',
+                  'border-radius': '6px',
                   border: 'none',
-                  background: 'var(--surface-soft)',
-                  color: 'var(--text-muted)',
-                  'font-size': '0.9375rem',
+                  background: '#f1f5f9',
+                  color: '#64748b',
+                  'font-size': '0.8125rem',
                   'font-weight': '600',
                   cursor: (fetchingInfo() || isSubmitting()) ? 'not-allowed' : 'pointer',
                   transition: 'all 0.2s',
@@ -811,11 +750,11 @@ export default function DownloadVideoModal(props) {
                 }}
                 onMouseEnter={(e) => {
                   if (!fetchingInfo() && !isSubmitting()) {
-                    e.target.style.background = '#e5e7eb';
+                    e.target.style.background = '#e2e8f0';
                   }
                 }}
                 onMouseLeave={(e) => {
-                  e.target.style.background = 'var(--surface-soft)';
+                  e.target.style.background = '#f1f5f9';
                 }}
               >
                 取消
@@ -826,26 +765,26 @@ export default function DownloadVideoModal(props) {
                 disabled={!canSubmit()}
                 style={{
                   flex: 2,
-                  padding: '0.875rem 1.5rem',
-                  'border-radius': '12px',
+                  padding: '0.5rem 1rem',
+                  'border-radius': '6px',
                   border: 'none',
                   background: canSubmit() ? 'linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%)' : '#e5e7eb',
                   color: canSubmit() ? 'white' : '#9ca3af',
-                  'font-size': '0.9375rem',
+                  'font-size': '0.8125rem',
                   'font-weight': '600',
                   cursor: canSubmit() ? 'pointer' : 'not-allowed',
                   transition: 'all 0.2s',
-                  'box-shadow': canSubmit() ? '0 4px 12px rgba(16, 185, 129, 0.25)' : 'none',
+                  'box-shadow': canSubmit() ? '0 2px 8px rgba(16, 185, 129, 0.2)' : 'none',
                 }}
                 onMouseEnter={(e) => {
                   if (canSubmit()) {
                     e.target.style.transform = 'translateY(-1px)';
-                    e.target.style.boxShadow = '0 6px 16px rgba(16, 185, 129, 0.3)';
+                    e.target.style.boxShadow = '0 4px 12px rgba(16, 185, 129, 0.25)';
                   }
                 }}
                 onMouseLeave={(e) => {
                   e.target.style.transform = 'translateY(0)';
-                  e.target.style.boxShadow = canSubmit() ? '0 4px 12px rgba(16, 185, 129, 0.25)' : 'none';
+                  e.target.style.boxShadow = canSubmit() ? '0 2px 8px rgba(16, 185, 129, 0.2)' : 'none';
                 }}
               >
                 {isSubmitting() ? '提交中...' : '添加到下载队列'}
