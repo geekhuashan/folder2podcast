@@ -3,15 +3,13 @@
  *
  * 说明：
  * - 删除了所有服务实例化（改用函数式服务）
- * - 添加了 Session 管理
+ * - 删除了 Session 管理（使用 URL 参数认证）
  * - 简化了路由注册
  */
 
 import fastify, { FastifyInstance } from 'fastify';
 import fastifyStatic from '@fastify/static';
 import fastifyCors from '@fastify/cors';
-import fastifySession from '@fastify/session';
-import fastifyCookie from '@fastify/cookie';
 import fastifyMultipart from '@fastify/multipart';
 import path from 'path';
 import { getEnvConfig } from './utils/env';
@@ -59,19 +57,6 @@ export class PodcastServer {
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
       });
 
-      // 注册 Cookie 支持（Session 依赖）
-      await this.server.register(fastifyCookie);
-
-      // 注册 Session 管理
-      await this.server.register(fastifySession, {
-        secret: process.env.SESSION_SECRET || 'folder2podcast-secret-key',
-        cookie: {
-          secure: false, // 内网不需要 HTTPS
-          sameSite: 'lax', // 修复刷新时 Cookie 丢失问题
-          maxAge: 7 * 24 * 60 * 60 * 1000, // 7 天
-        },
-      });
-
       // 注册 Multipart 支持（文件上传）
       await this.server.register(fastifyMultipart, {
         limits: {
@@ -93,7 +78,7 @@ export class PodcastServer {
 
       // ====== 注册路由 ======
 
-      // 认证路由（登录/登出）
+      // 认证路由（登录验证）
       await authRoutes(this.server);
 
       // 音频文件访问路由（支持用户隔离）

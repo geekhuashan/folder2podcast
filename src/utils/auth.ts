@@ -1,36 +1,40 @@
-import { db } from '../db';
-import { users } from '../db/schema';
-import { eq } from 'drizzle-orm';
+import { getEnvConfig } from './env';
 
 /**
  * 验证用户登录
  *
  * @param username - 用户名
  * @param password - 密码（明文）
- * @returns 用户对象（不含密码）或 null
+ * @returns 用户对象或 null
  *
  * 说明：
+ * - 不再使用数据库，直接验证环境变量中的用户名密码
  * - 密码直接明文比对（内网使用，无需加密）
- * - 返回的用户对象不包含密码字段
+ * - 如果没有配置环境变量，则允许任意用户名密码登录（开发模式）
  */
 export async function verifyLogin(username: string, password: string) {
-  // 从数据库查询用户
-  const user = await db.select().from(users).where(eq(users.username, username)).get();
+  const env = getEnvConfig();
+  const { ADMIN_USERNAME, ADMIN_PASSWORD } = env;
 
-  if (!user) {
+  // 如果没有配置环境变量，允许任意用户名密码登录（开发模式）
+  if (!ADMIN_USERNAME || !ADMIN_PASSWORD) {
+    return {
+      id: 'dev-user',
+      username: username || 'dev-user',
+      nickname: '开发用户',
+    };
+  }
+
+  // 验证环境变量中的用户名密码
+  if (username !== ADMIN_USERNAME || password !== ADMIN_PASSWORD) {
     return null;
   }
 
-  // 明文密码比对
-  if (user.password !== password) {
-    return null;
-  }
-
-  // 返回用户信息（排除密码字段）
+  // 返回用户信息
   return {
-    id: user.id,
-    username: user.username,
-    nickname: user.nickname,
+    id: ADMIN_USERNAME,
+    username: ADMIN_USERNAME,
+    nickname: '管理员',
   };
 }
 
@@ -41,11 +45,11 @@ export async function verifyLogin(username: string, password: string) {
  * @returns 用户对象或 null
  *
  * 说明：
- * - 从 Session 中读取用户信息
+ * - 从 Session 中读取用户信息（兼容旧代码）
  * - 如果未登录返回 null
  */
 export function getCurrentUser(request: any) {
-  return request.session.user || null;
+  return request.session?.user || null;
 }
 
 /**
@@ -55,5 +59,5 @@ export function getCurrentUser(request: any) {
  * @returns 是否已登录
  */
 export function isAuthenticated(request: any): boolean {
-  return !!request.session.user;
+  return !!request.session?.user;
 }

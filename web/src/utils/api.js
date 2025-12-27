@@ -1,12 +1,19 @@
 // API 基础配置
 const API_BASE = '/api';
-const API_KEY = new URLSearchParams(window.location.search).get('apiKey') || '';
 
-// 添加 API Key 到 URL
-const addApiKey = (url) => {
-  if (!API_KEY) return url;
+// 从 localStorage 读取用户名和密码（登录后保存）
+const getCredentials = () => {
+  const username = localStorage.getItem('auth_username') || '';
+  const password = localStorage.getItem('auth_password') || '';
+  return { username, password };
+};
+
+// 添加认证信息到 URL
+const addAuth = (url) => {
+  const { username, password } = getCredentials();
+  if (!username || !password) return url;
   const separator = url.includes('?') ? '&' : '?';
-  return `${url}${separator}apiKey=${API_KEY}`;
+  return `${url}${separator}username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
 };
 
 // 通用请求函数
@@ -18,9 +25,8 @@ async function request(url, options = {}) {
       headers['Content-Type'] = 'application/json';
     }
 
-    const response = await fetch(addApiKey(url), {
+    const response = await fetch(addAuth(url), {
       ...options,
-      credentials: 'include', // 携带 Cookie（Session）
       headers,
     });
 
@@ -38,27 +44,43 @@ async function request(url, options = {}) {
 
 // ====== 认证 API ======
 export const authAPI = {
-  // 登录
+  // 登录（验证后端环境变量中的用户名密码）
   async login(username, password) {
-    return request(`${API_BASE}/auth/login`, {
+    // 调用后端验证接口
+    const result = await request(`${API_BASE}/auth/login`, {
       method: 'POST',
       body: JSON.stringify({ username, password }),
     });
+
+    // 验证成功后保存到 localStorage
+    localStorage.setItem('auth_username', username);
+    localStorage.setItem('auth_password', password);
+
+    return result;
   },
 
-  // 登出
+  // 登出（清除 localStorage）
   async logout() {
-    return request(`${API_BASE}/auth/logout`, {
-      method: 'POST',
-    });
+    localStorage.removeItem('auth_username');
+    localStorage.removeItem('auth_password');
+    return { success: true };
   },
 
-  // 获取当前用户
+  // 获取当前用户（从 localStorage 读取）
   async getCurrentUser() {
-    return request(`${API_BASE}/auth/me`);
+    const username = localStorage.getItem('auth_username');
+    if (!username) {
+      throw new Error('未登录');
+    }
+    return {
+      user: {
+        id: username,
+        username: username,
+        nickname: '管理员',
+      }
+    };
   },
 };
-
 
 // 播客 API
 export const podcastsAPI = {

@@ -1,7 +1,6 @@
 import { FastifyInstance, FastifyRequest } from 'fastify';
 import { FileManagementService } from '../services/file-management.service';
 import { requireAuth } from '../middleware/auth.middleware';
-import { getCurrentUser } from '../utils/auth';
 import { db } from '../db';
 import { episodes } from '../db/schema';
 import { eq } from 'drizzle-orm';
@@ -37,16 +36,17 @@ export async function registerFileManagementRoutes(server: FastifyInstance) {
         const fileName = data.filename;
         const fileBuffer = await data.toBuffer();
 
-        // 获取当前用户
-        const user = await getCurrentUser(request);
+        // 从 URL 参数获取用户名（requireAuth 中间件已验证）
+        const { username } = (request.query as { username?: string });
+        const userId = username || 'guest';
 
         // 保存文件
-        await fileService.saveFile(user.id, request.params.dirName, fileName, fileBuffer);
+        await fileService.saveFile(userId, request.params.dirName, fileName, fileBuffer);
 
         // ✅ 立即插入数据库
-        const podcastId = `${user.id}:${request.params.dirName}`;
+        const podcastId = `${userId}:${request.params.dirName}`;
         const storage = getStorage();
-        const filePath = `audio/${user.id}/${request.params.dirName}/${fileName}`;
+        const filePath = `audio/${userId}/${request.params.dirName}/${fileName}`;
         const fileStats = await storage.getFileStats(filePath);
 
         await insertEpisodeOnFileUpload({
@@ -81,13 +81,14 @@ export async function registerFileManagementRoutes(server: FastifyInstance) {
     },
     async (request, reply) => {
       try {
-        // 获取当前用户
-        const user = await getCurrentUser(request);
-        const podcastId = `${user.id}:${request.params.dirName}`;
+        // 从 URL 参数获取用户名（requireAuth 中间件已验证）
+        const { username } = (request.query as { username?: string });
+        const userId = username || 'guest';
+        const podcastId = `${userId}:${request.params.dirName}`;
         const fileName = decodeURIComponent(request.params.fileName);
 
         // 1. 删除文件系统中的文件
-        await fileService.deleteFile(user.id, request.params.dirName, fileName);
+        await fileService.deleteFile(userId, request.params.dirName, fileName);
 
         // 2. 同步删除数据库中的剧集记录
         const episodeId = `${podcastId}:${fileName}`;
@@ -123,13 +124,14 @@ export async function registerFileManagementRoutes(server: FastifyInstance) {
           return reply.code(400).send({ error: 'newName is required' });
         }
 
-        // 获取当前用户
-        const user = await getCurrentUser(request);
-        const podcastId = `${user.id}:${request.params.dirName}`;
+        // 从 URL 参数获取用户名（requireAuth 中间件已验证）
+        const { username } = (request.query as { username?: string });
+        const userId = username || 'guest';
+        const podcastId = `${userId}:${request.params.dirName}`;
         const oldFileName = decodeURIComponent(request.params.fileName);
 
         // 1. 重命名文件系统中的文件
-        await fileService.renameFile(user.id, request.params.dirName, oldFileName, newName);
+        await fileService.renameFile(userId, request.params.dirName, oldFileName, newName);
 
         // 2. 更新数据库中的剧集记录
         const oldEpisodeId = `${podcastId}:${oldFileName}`;

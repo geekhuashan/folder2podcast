@@ -1,21 +1,41 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
-import { isAuthenticated } from '../utils/auth';
+import { getEnvConfig } from '../utils/env';
 
 /**
  * 认证中间件 - 要求必须登录
  *
  * 说明：
- * - 用于需要登录才能访问的路由（如创建、编辑、删除操作）
- * - 未登录返回 401 Unauthorized
+ * - 读操作（GET/HEAD）：不需要认证，访客可以访问
+ * - 写操作（POST/PUT/DELETE）：需要管理员用户名和密码
+ * - 从查询参数中读取 username 和 password
  *
  * @example
  * server.post('/api/podcasts', { preHandler: requireAuth }, async (request, reply) => {
- *   // 此处用户一定已登录
+ *   // 此处用户一定已通过认证
  * });
  */
 export async function requireAuth(request: FastifyRequest, reply: FastifyReply) {
-  if (!isAuthenticated(request)) {
-    return reply.code(401).send({ error: '需要登录' });
+  const env = getEnvConfig();
+  const { ADMIN_USERNAME, ADMIN_PASSWORD } = env;
+
+  // 如果没有配置用户名密码，则允许所有操作（开发模式）
+  if (!ADMIN_USERNAME || !ADMIN_PASSWORD) {
+    return;
+  }
+
+  // 读操作（GET/HEAD）不需要认证 - 访客可以访问
+  const isReadOnly = request.method === 'GET' || request.method === 'HEAD';
+  if (isReadOnly) {
+    return; // 读操作直接放行
+  }
+
+  // 写操作（POST/PUT/DELETE/PATCH）需要用户名和密码 - 管理员权限
+  const { username, password } = request.query as { username?: string; password?: string };
+  if (username !== ADMIN_USERNAME || password !== ADMIN_PASSWORD) {
+    return reply.code(401).send({
+      error: 'Unauthorized',
+      message: 'Write operations require admin credentials. Add ?username=USER&password=PASS to URL.'
+    });
   }
 }
 

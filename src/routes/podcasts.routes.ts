@@ -10,7 +10,6 @@
 
 import { FastifyInstance } from "fastify";
 import { requireAuth } from "../middleware/auth.middleware";
-import { getCurrentUser } from "../utils/auth";
 import {
   getUserPodcasts,
   getAllPodcasts,
@@ -35,10 +34,11 @@ export async function registerPodcastsRoutes(server: FastifyInstance) {
    * - 如果未登录（访客模式），返回所有播客的只读列表
    */
   server.get("/api/podcasts", async (request, reply) => {
-    const user = getCurrentUser(request);
+    // 从 URL 参数获取用户名（可选）
+    const { username } = (request.query as { username?: string });
 
-    // 如果未登录（访客模式），返回所有播客（只读）
-    if (!user) {
+    // 如果没有提供用户名，返回所有播客（访客模式）
+    if (!username) {
       const list = await getAllPodcasts();
 
       return {
@@ -58,8 +58,8 @@ export async function registerPodcastsRoutes(server: FastifyInstance) {
       };
     }
 
-    // 已登录用户，返回其播客列表
-    const list = await getUserPodcasts(user.id);
+    // 提供了用户名，返回该用户的播客列表
+    const list = await getUserPodcasts(username);
 
     return {
       data: list.map((podcast) => ({
@@ -116,7 +116,10 @@ export async function registerPodcastsRoutes(server: FastifyInstance) {
       author?: string;
     };
   }>("/api/podcasts", { preHandler: requireAuth }, async (request, reply) => {
-    const user = getCurrentUser(request);
+    // 从 URL 参数获取用户名（requireAuth 中间件已验证）
+    const { username } = (request.query as { username?: string });
+    const userId = username || 'guest'; // 如果没有用户名，使用 guest
+
     const { dirName, title, description, author } = request.body;
 
     // 参数验证
@@ -125,7 +128,7 @@ export async function registerPodcastsRoutes(server: FastifyInstance) {
     }
 
     // 创建播客
-    const podcast = await createPodcast(user.id, {
+    const podcast = await createPodcast(userId, {
       dirName,
       title,
       description,
@@ -148,12 +151,14 @@ export async function registerPodcastsRoutes(server: FastifyInstance) {
     "/api/podcasts/:id",
     { preHandler: requireAuth },
     async (request, reply) => {
-      const user = getCurrentUser(request);
+      // 从 URL 参数获取用户名（requireAuth 中间件已验证）
+      const { username } = (request.query as { username?: string });
+      const userId = username || 'guest';
 
       try {
         const updated = await updatePodcast(
           request.params.id,
-          user.id,
+          userId,
           request.body as any,
         );
         return { data: updated };
@@ -181,11 +186,13 @@ export async function registerPodcastsRoutes(server: FastifyInstance) {
     "/api/podcasts/:id",
     { preHandler: requireAuth },
     async (request, reply) => {
-      const user = getCurrentUser(request);
+      // 从 URL 参数获取用户名（requireAuth 中间件已验证）
+      const { username } = (request.query as { username?: string });
+      const userId = username || 'guest';
       const deleteFiles = request.query.deleteFiles === "true";
 
       try {
-        await deletePodcast(request.params.id, user.id, deleteFiles);
+        await deletePodcast(request.params.id, userId, deleteFiles);
         return { success: true };
       } catch (error: any) {
         return reply.code(403).send({ error: error.message });

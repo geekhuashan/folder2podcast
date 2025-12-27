@@ -10,7 +10,6 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { BilibiliDownloadService } from '../services/bilibili-download.service';
 import { BilibiliDownloadRequest } from '../types';
 import { requireAuth } from '../middleware/auth.middleware';
-import { getCurrentUser } from '../utils/auth';
 
 /**
  * 注册 B 站视频下载相关路由
@@ -125,8 +124,9 @@ export async function registerBilibiliRoutes(server: FastifyInstance): Promise<v
         { preHandler: requireAuth },
         async (request: FastifyRequest<{ Body: BilibiliDownloadRequest }>, reply: FastifyReply) => {
             try {
-                // 1. 获取当前登录用户
-                const user = getCurrentUser(request);
+                // 1. 从 URL 参数获取用户名（requireAuth 中间件已验证）
+                const { username } = (request.query as { username?: string });
+                const userId = username || 'guest';
 
                 // 2. 提取请求参数
                 const downloadRequest = request.body;
@@ -142,14 +142,14 @@ export async function registerBilibiliRoutes(server: FastifyInstance): Promise<v
                 // 3. 记录请求日志
                 server.log.info({
                     action: 'bilibili_download_start',
-                    userId: user.id,
+                    userId,
                     url: downloadRequest.url,
                     podcastName: downloadRequest.podcastName,
                     episodeTitle: downloadRequest.episodeTitle
                 }, '创建 B 站视频下载任务');
 
                 // 4. 调用下载服务,传递 userId
-                const taskId = await bilibiliService.startDownload(downloadRequest, user.id);
+                const taskId = await bilibiliService.startDownload(downloadRequest, userId);
 
                 server.log.info({
                     action: 'bilibili_task_created',

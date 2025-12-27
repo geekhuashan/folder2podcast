@@ -2,27 +2,6 @@ import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
 
 /**
- * 用户表
- * 存储登录账号信息
- *
- * 说明：
- * - 密码使用明文存储（内网使用，无需加密）
- * - 默认用户：admin/admin
- */
-export const users = sqliteTable('users', {
-  // 用户唯一标识
-  id: text('id').primaryKey(),
-  // 用户名（用于登录）
-  username: text('username').notNull().unique(),
-  // 密码（明文存储）
-  password: text('password').notNull(),
-  // 昵称（显示用）
-  nickname: text('nickname'),
-  // 创建时间
-  createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(unixepoch())`),
-});
-
-/**
  * 播客表
  * 存储播客的基础信息和配置
  * 替代原来的 podcast.json 文件
@@ -30,12 +9,13 @@ export const users = sqliteTable('users', {
  * 说明：
  * - id 格式: {userId}:{dirName}，例如 "admin:my-podcast"
  * - 每个用户的播客目录隔离：audio/{userId}/{dirName}/
+ * - userId 从认证中间件获取（通过环境变量 ADMIN_USERNAME）
  */
 export const podcasts = sqliteTable('podcasts', {
   // 播客唯一标识（格式: userId:dirName）
   id: text('id').primaryKey(),
-  // 所属用户 ID（外键关联 users 表）
-  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  // 所属用户 ID（不再使用外键，直接存储用户标识符）
+  userId: text('user_id').notNull(),
   // 目录名（用于文件系统路径）
   dirName: text('dir_name').notNull(),
 

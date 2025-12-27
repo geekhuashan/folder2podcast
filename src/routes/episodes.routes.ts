@@ -10,7 +10,6 @@
 
 import { FastifyInstance } from "fastify";
 import { requireAuth } from "../middleware/auth.middleware";
-import { getCurrentUser } from "../utils/auth";
 import {
   updateEpisodeMetadata,
   deleteEpisodeMetadata,
@@ -83,7 +82,9 @@ export async function registerEpisodesRoutes(server: FastifyInstance) {
     "/api/podcasts/:id/episodes/:fileName",
     { preHandler: requireAuth },
     async (request, reply) => {
-      const user = getCurrentUser(request);
+      // 从 URL 参数获取用户名（requireAuth 中间件已验证）
+      const { username } = (request.query as { username?: string });
+      const userId = username || 'guest';
       const { id, fileName } = request.params;
 
       // 解码文件名
@@ -93,7 +94,7 @@ export async function registerEpisodesRoutes(server: FastifyInstance) {
         const updated = await updateEpisodeMetadata(
           id,
           decodedFileName,
-          user.id,
+          userId,
           request.body,
         );
         return { data: updated };
@@ -116,14 +117,16 @@ export async function registerEpisodesRoutes(server: FastifyInstance) {
     "/api/podcasts/:id/episodes/:fileName",
     { preHandler: requireAuth },
     async (request, reply) => {
-      const user = getCurrentUser(request);
+      // 从 URL 参数获取用户名（requireAuth 中间件已验证）
+      const { username } = (request.query as { username?: string });
+      const userId = username || 'guest';
       const { id, fileName } = request.params;
 
       // 解码文件名
       const decodedFileName = decodeURIComponent(fileName);
 
       try {
-        await deleteEpisodeMetadata(id, decodedFileName, user.id);
+        await deleteEpisodeMetadata(id, decodedFileName, userId);
         return { success: true };
       } catch (error: any) {
         return reply.code(403).send({ error: error.message });
@@ -145,7 +148,9 @@ export async function registerEpisodesRoutes(server: FastifyInstance) {
     "/api/podcasts/:id/episodes/:fileName/cover",
     { preHandler: requireAuth },
     async (request, reply) => {
-      const user = getCurrentUser(request);
+      // 从 URL 参数获取用户名（requireAuth 中间件已验证）
+      const { username } = (request.query as { username?: string });
+      const currentUserId = username || 'guest';
       const { id, fileName } = request.params;
 
       try {
@@ -154,7 +159,7 @@ export async function registerEpisodesRoutes(server: FastifyInstance) {
 
         // 解析 podcastId
         const [userId, dirName] = id.split(":");
-        if (userId !== user.id) {
+        if (userId !== currentUserId) {
           return reply.code(403).send({ error: "无权限操作此播客" });
         }
 
@@ -228,7 +233,9 @@ export async function registerEpisodesRoutes(server: FastifyInstance) {
     "/api/podcasts/:id/episodes/:fileName/cover",
     { preHandler: requireAuth },
     async (request, reply) => {
-      const user = getCurrentUser(request);
+      // 从 URL 参数获取用户名（requireAuth 中间件已验证）
+      const { username } = (request.query as { username?: string });
+      const currentUserId = username || 'guest';
       const { id, fileName } = request.params;
 
       try {
@@ -237,7 +244,7 @@ export async function registerEpisodesRoutes(server: FastifyInstance) {
 
         // 解析 podcastId
         const [userId, dirName] = id.split(":");
-        if (userId !== user.id) {
+        if (userId !== currentUserId) {
           return reply.code(403).send({ error: "无权限操作此播客" });
         }
 
@@ -292,7 +299,9 @@ export async function registerEpisodesRoutes(server: FastifyInstance) {
     "/api/podcasts/:id/episodes/:fileName/republish",
     { preHandler: requireAuth },
     async (request, reply) => {
-      const user = getCurrentUser(request);
+      // 从 URL 参数获取用户名（requireAuth 中间件已验证）
+      const { username } = (request.query as { username?: string });
+      const currentUserId = username || 'guest';
       const { id, fileName } = request.params;
 
       try {
@@ -301,7 +310,7 @@ export async function registerEpisodesRoutes(server: FastifyInstance) {
 
         // 解析 podcastId
         const [userId, dirName] = id.split(":");
-        if (userId !== user.id) {
+        if (userId !== currentUserId) {
           return reply.code(403).send({ error: "无权限操作此播客" });
         }
 
@@ -366,7 +375,9 @@ export async function registerEpisodesRoutes(server: FastifyInstance) {
       try {
         const podcastId = request.params.id;
         const { strategy } = request.body;
-        const user = getCurrentUser(request);
+        // 从 URL 参数获取用户名（requireAuth 中间件已验证）
+        const { username } = (request.query as { username?: string });
+        const userId = username || 'guest';
 
         // 验证策略参数
         const validStrategies = ["prefix", "suffix", "first", "last", "date"];
@@ -385,7 +396,7 @@ export async function registerEpisodesRoutes(server: FastifyInstance) {
         if (!podcast) {
           return reply.code(404).send({ error: "播客不存在" });
         }
-        if (podcast.userId !== user.id) {
+        if (podcast.userId !== userId) {
           return reply.code(403).send({ error: "无权限操作此播客" });
         }
 
@@ -452,7 +463,9 @@ export async function registerEpisodesRoutes(server: FastifyInstance) {
       try {
         const podcastId = request.params.id;
         const { strategy } = request.body;
-        const user = getCurrentUser(request);
+        // 从 URL 参数获取用户名（requireAuth 中间件已验证）
+        const { username } = (request.query as { username?: string });
+        const userId = username || 'guest';
 
         // 验证策略参数
         const validStrategies = ["prefix", "suffix", "first", "last", "date"];
@@ -471,7 +484,7 @@ export async function registerEpisodesRoutes(server: FastifyInstance) {
         if (!podcast) {
           return reply.code(404).send({ error: "播客不存在" });
         }
-        if (podcast.userId !== user.id) {
+        if (podcast.userId !== userId) {
           return reply.code(403).send({ error: "无权限操作此播客" });
         }
 

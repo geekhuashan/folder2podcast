@@ -34,8 +34,10 @@ export interface EnvConfig {
     BASE_URL: string;
     // 主机名/IP地址（用于生成BASE_URL，默认localhost）
     HOST: string;
-    // 管理 API 密钥（可选）
-    API_KEY?: string;
+    // 管理员用户名（可选，用于写操作认证）
+    ADMIN_USERNAME?: string;
+    // 管理员密码（可选，用于写操作认证）
+    ADMIN_PASSWORD?: string;
 
     // ========== S3 存储配置 ==========
     // 存储模式：local=本地存储，s3=S3对象存储
@@ -83,8 +85,9 @@ export function getEnvConfig(): EnvConfig {
         HOST: host,
         // 服务器基础URL
         BASE_URL: baseUrl,
-        // API 密钥（可选）
-        API_KEY: process.env.API_KEY,
+        // 管理员认证（可选）
+        ADMIN_USERNAME: process.env.ADMIN_USERNAME,
+        ADMIN_PASSWORD: process.env.ADMIN_PASSWORD,
 
         // ========== S3 存储配置 ==========
         STORAGE_MODE: storageMode,
