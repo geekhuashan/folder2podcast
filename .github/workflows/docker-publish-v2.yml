@@ -1,11 +1,14 @@
-name: Docker Image CI/CD (v2)
+name: Docker Image CI/CD (V2 Stable)
 
-# 专门用于 dev-v2 分支的自动构建和发布
-# 不影响 main 分支和 v1 版本的发布流程
+# 专门用于 main-v2 分支的生产版本发布
+# V2 开发版本见 docker-publish-dev-v2.yml
 
 on:
   push:
-    branches: [ "dev-v2" ]
+    branches: [ "main-v2" ]
+    tags: [ 'v*.*.*' ]
+  pull_request:
+    branches: [ "main-v2" ]
   workflow_dispatch:  # 允许手动触发
 
 env:
@@ -35,42 +38,36 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Extract commit SHA (short)
-        id: sha
-        run: echo "short_sha=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
 
-      - name: Build and push Docker image (dev-v2)
+      - name: Build and push Docker image (main-v2)
         uses: docker/build-push-action@v5
         with:
           context: .
-          push: true
+          push: ${{ github.event_name != 'pull_request' }}
           platforms: ${{ env.PLATFORMS }}
           tags: |
-            ${{ env.IMAGE_NAME }}:dev-v2
-            ${{ env.IMAGE_NAME }}:dev-v2-${{ steps.sha.outputs.short_sha }}
-          labels: |
-            org.opencontainers.image.source=${{ github.repositoryUrl }}
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
-            org.opencontainers.image.version=v2-dev
+            ${{ env.IMAGE_NAME }}:main-v2
+            ${{ env.IMAGE_NAME }}:latest-v2
+          labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      - name: Update latest-v2 tag
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          platforms: ${{ env.PLATFORMS }}
-          tags: ${{ env.IMAGE_NAME }}:latest-v2
-          cache-from: type=gha
 
       - name: Image digest
         run: |
           echo "✅ Docker images built and pushed successfully!"
           echo "📦 Tags:"
-          echo "  - ${{ env.IMAGE_NAME }}:dev-v2"
-          echo "  - ${{ env.IMAGE_NAME }}:dev-v2-${{ steps.sha.outputs.short_sha }}"
+          echo "  - ${{ env.IMAGE_NAME }}:main-v2"
           echo "  - ${{ env.IMAGE_NAME }}:latest-v2"
 
       # 可选：发送通知（如果配置了 Bark）
@@ -78,6 +75,6 @@ jobs:
         if: success()
         continue-on-error: true
         run: |
-          TITLE=$(echo -n "Docker镜像构建成功 (v2)" | jq -sRr @uri)
-          BODY=$(echo -n "dev-v2分支已成功构建并推送到DockerHub" | jq -sRr @uri)
+          TITLE=$(echo -n "Docker镜像构建成功 (v2 stable)" | jq -sRr @uri)
+          BODY=$(echo -n "main-v2分支已成功构建并推送到DockerHub" | jq -sRr @uri)
           curl --location "https://api.day.app/${{ secrets.BARK_KEY }}/${TITLE}/${BODY}?url=https://hub.docker.com/r/${{ env.IMAGE_NAME }}"
