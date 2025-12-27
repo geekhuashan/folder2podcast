@@ -91,9 +91,9 @@ RUN printf '%s\n' \
 # 暴露端口
 EXPOSE 3100
 
-# 健康检查 - 使用 v2 API 端点
+# 健康检查
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:${PORT}/api/v2/podcasts || exit 1
+    CMD wget --no-verbose --tries=1 --spider http://localhost:${PORT}/api/podcasts || exit 1
 
 # 启动命令
 CMD ["/entrypoint.sh"]

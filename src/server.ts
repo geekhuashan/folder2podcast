@@ -130,7 +130,7 @@ export class PodcastServer {
       } else {
         // 开发环境
         const vitePort = process.env.VITE_PORT || '3200';
-        console.log(`✓ Web 界面: http://${config.HOST}:${vitePort}/web/ (Vite 开发服务器)`);
+        console.log(`✓ Web 界面: http://localhost:${vitePort}/web/ (Vite 开发服务器)`);
       }
       console.log('');
     } catch (error) {

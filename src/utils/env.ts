@@ -32,8 +32,6 @@ export interface EnvConfig {
     PORT: number;
     // 服务器基础URL，用于生成RSS feed中的链接（不配置时自动生成）
     BASE_URL: string;
-    // 主机名/IP地址（用于生成BASE_URL，默认localhost）
-    HOST: string;
     // 管理员用户名（可选，用于写操作认证）
     ADMIN_USERNAME?: string;
     // 管理员密码（可选，用于写操作认证）
@@ -65,13 +63,12 @@ export interface EnvConfig {
 export function getEnvConfig(): EnvConfig {
     const defaultAudioDir = path.join(process.cwd(), 'audio');
     const defaultPort = 3100;
-    const defaultHost = 'localhost';
+    const defaultBaseUrl = 'http://localhost:3100';
 
     const port = parseInt(process.env.PORT || String(defaultPort), 10);
-    const host = process.env.HOST || defaultHost;
 
-    // BASE_URL 优先使用环境变量，否则根据 HOST 和 PORT 自动生成
-    const baseUrl = process.env.BASE_URL || `http://${host}:${port}`;
+    // BASE_URL 优先使用环境变量，否则使用默认值
+    const baseUrl = process.env.BASE_URL || defaultBaseUrl;
 
     // 存储模式，默认为 local
     const storageMode = (process.env.STORAGE_MODE as 'local' | 's3') || 'local';
@@ -81,8 +78,6 @@ export function getEnvConfig(): EnvConfig {
         AUDIO_DIR: process.env.AUDIO_DIR || defaultAudioDir,
         // 服务器端口，默认3100
         PORT: port,
-        // 主机名/IP地址
-        HOST: host,
         // 服务器基础URL
         BASE_URL: baseUrl,
         // 管理员认证（可选）
