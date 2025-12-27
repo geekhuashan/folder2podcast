@@ -1,7 +1,7 @@
 # ====================================
 # 后端构建阶段
 # ====================================
-FROM node:20-alpine AS backend-builder
+FROM node:20-slim AS backend-builder
 
 WORKDIR /app
 
@@ -19,7 +19,7 @@ RUN npm run build
 # ====================================
 # 前端构建阶段
 # ====================================
-FROM node:20-alpine AS frontend-builder
+FROM node:20-slim AS frontend-builder
 
 WORKDIR /app/web
 
