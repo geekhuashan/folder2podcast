@@ -52,7 +52,7 @@ COPY --from=backend-builder /app/package*.json ./
 COPY --from=backend-builder /app/node_modules ./node_modules
 
 # 复制前端构建产物（Vite 构建输出到 ../assets/web）
-COPY --from=frontend-builder /app/assets/web ./web/dist
+COPY --from=frontend-builder /app/assets ./assets
 
 # 创建必要的目录
 RUN mkdir -p /podcasts /app/bin && chmod 755 /podcasts
