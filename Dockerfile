@@ -36,15 +36,16 @@ RUN npm run build
 # ====================================
 # 运行阶段
 # ====================================
-FROM node:20-alpine
+FROM node:20-slim
 
 WORKDIR /app
 
 # 安装运行时依赖（BBDown 需要的系统库和 FFmpeg）
-RUN apk add --no-cache \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     ffmpeg \
-    wget
+    wget \
+    && rm -rf /var/lib/apt/lists/*
 
 # 复制后端构建产物和依赖
 COPY --from=backend-builder /app/dist ./dist
