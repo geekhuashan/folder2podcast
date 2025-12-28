@@ -10,6 +10,7 @@ import CreatePodcastModal from "./CreatePodcastModal";
 import DownloadVideoModal from "./DownloadVideoModal";
 import { useToast } from "./Toast";
 import { useModal } from "../contexts/ModalContext";
+import { getFeedUrl } from "../utils/url";
 
 // 复制到剪贴板功能
 const copyToClipboard = async (text) => {
@@ -378,7 +379,7 @@ export default function PodcastList(props) {
                             RSS 订阅地址
                           </div>
                           <div class="rss-chip">
-                            /feeds/{podcast.dirName}.xml
+                            {getFeedUrl(podcast.id)}
                           </div>
                         </div>
                         <button

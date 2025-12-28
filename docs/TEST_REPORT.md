@@ -70,7 +70,7 @@
 
 #### 7. RSS Feed 生成测试
 - **状态**: ✅ 通过
-- **端点**: `GET /feeds/:podcast.xml`
+- **端点**: `GET /feeds/:userId/:podcast.xml`
 - **HTTP 状态码**: 200
 - **结果**: RSS feed 生成正常，与现有功能兼容
 

@@ -48,7 +48,7 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply) 
  * - 未登录也可以继续访问
  *
  * @example
- * server.get('/feeds/:id.xml', { preHandler: optionalAuth }, async (request, reply) => {
+ * server.get('/feeds/:userId/:podcastName.xml', { preHandler: optionalAuth }, async (request, reply) => {
  *   const user = getCurrentUser(request); // 可能为 null
  * });
  */

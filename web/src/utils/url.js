@@ -23,8 +23,8 @@
  *
  * **RSS Feed URL**（前端生成）：
  * ```
- * /feeds/{podcastId}.xml                     # 相对路径
- * {origin}/feeds/{podcastId}.xml             # 完整 URL
+ * /feeds/{userId}/{dirName}.xml                     # 相对路径
+ * {origin}/feeds/{userId}/{dirName}.xml             # 完整 URL
  * ```
  *
  * ## 为什么前端不再构造媒体 URL？
@@ -76,10 +76,14 @@
  * @param {string} podcastId - 播客 ID（格式: userId:dirName）
  * @returns {string} 相对路径
  *
- * 格式: /feeds/{podcastId}.xml
+ * 格式: /feeds/{userId}/{dirName}.xml
  */
 export function getFeedUrl(podcastId) {
-  return `/feeds/${encodeURIComponent(podcastId)}.xml`;
+  const [userId, ...dirParts] = podcastId.split(":");
+  const dirName = dirParts.length > 0 ? dirParts.join(":") : userId;
+  const encodedUserId = encodeURIComponent(userId || "default");
+  const encodedDirName = encodeURIComponent(dirName || encodedUserId);
+  return `/feeds/${encodedUserId}/${encodedDirName}.xml`;
 }
 
 /**

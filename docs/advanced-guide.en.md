@@ -182,12 +182,12 @@ The system provides standard URL access methods:
 
 Audio file access:
 ```
-http://[server-address]/audio/[podcast-folder-name]/[audio-filename]
+http://[server-address]/audio/[user-id]/[podcast-folder-name]/[audio-filename]
 ```
 
 RSS Feed access:
 ```
-http://[server-address]/feeds/[podcast-folder-name].xml
+http://[server-address]/feeds/[user-id]/[podcast-folder-name].xml
 ```
 
 > 📝 Note:

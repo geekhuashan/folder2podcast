@@ -401,7 +401,7 @@ curl -X PUT \
   }'
 
 # 4. 访问 RSS feed
-# http://localhost:3100/feeds/my-new-podcast.xml
+# http://localhost:3100/feeds/{userId}/my-new-podcast.xml
 ```
 
 ### 更新播客信息
@@ -439,6 +439,6 @@ curl -X DELETE \
 Management API 是现有 API 的扩展，不会影响现有的只读 API：
 - `GET /api/v2/podcasts` - V2 格式播客列表（只读）
 - `GET /podcasts` - V1 兼容格式播客列表（只读）
-- `GET /feeds/:dirName.xml` - RSS feed（只读）
+- `GET /feeds/:userId/:dirName.xml` - RSS feed（只读）
 
 Management API 提供的写操作都位于 `/api/v2/manage/` 路径下，完全独立。

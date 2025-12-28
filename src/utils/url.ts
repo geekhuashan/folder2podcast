@@ -164,7 +164,7 @@ export function getEpisodeCoverUrl(userId: string, podcastDirName: string, cover
  * @param podcastId - 播客 ID（格式: userId:dirName）
  * @returns 完整的 Feed URL
  *
- * 格式: {BASE_URL}/feeds/{podcastId}.xml
+ * 格式: {BASE_URL}/feeds/{userId}/{dirName}.xml
  */
 export function getFeedUrl(podcastId: string): string {
   // 确保 BASE_URL 包含协议前缀
@@ -172,7 +172,15 @@ export function getFeedUrl(podcastId: string): string {
   if (!baseUrl.startsWith('http://') && !baseUrl.startsWith('https://')) {
     baseUrl = `http://${baseUrl}`;
   }
-  return `${baseUrl}/feeds/${encodeURIComponent(podcastId)}.xml`;
+
+  // 将 podcastId 拆分为 userId 和 dirName
+  const [userId, ...dirParts] = podcastId.split(':');
+  const dirName = dirParts.length > 0 ? dirParts.join(':') : '';
+
+  const encodedUserId = encodeURIComponent(userId || 'default');
+  const encodedDirName = encodeURIComponent(dirName || userId);
+
+  return `${baseUrl}/feeds/${encodedUserId}/${encodedDirName}.xml`;
 }
 
 /**

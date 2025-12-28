@@ -26,7 +26,7 @@ import {
   markTaskFailed,
   uploadState,
 } from "../utils/uploadManager";
-// 移除 getFullFeedUrl 导入，后端已提供完整的 feedUrl
+import { getFeedUrl } from "../utils/url";
 
 // 复制到剪贴板功能
 const copyToClipboard = async (text) => {
@@ -565,7 +565,7 @@ export default function FileManager(props) {
               "font-family": "monospace",
             }}
           >
-            /feeds/{encodeURIComponent(props.podcast.id)}.xml
+            {getFeedUrl(props.podcast.id)}
           </code>
         </div>
 
