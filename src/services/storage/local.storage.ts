@@ -188,6 +188,14 @@ export class LocalStorage implements IStorage {
   }
 
   /**
+   * 以流的形式读取文件，用于大文件或 Range 传输
+   */
+  createReadStream(relativePath: string, options?: { start?: number; end?: number }) {
+    const absolutePath = this.getAbsolutePath(relativePath);
+    return fs.createReadStream(absolutePath, options);
+  }
+
+  /**
    * 创建目录（递归创建父目录）
    */
   async ensureDirectory(dirPath: string): Promise<void> {

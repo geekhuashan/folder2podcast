@@ -14,7 +14,7 @@
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import path from 'path';
-import { getStorage } from '../services/storage';
+import { getStorage, LocalStorage } from '../services/storage';
 import { db } from '../db';
 import { podcasts } from '../db/schema';
 import { eq } from 'drizzle-orm';
@@ -40,6 +40,53 @@ function getMimeType(fileName: string): string {
         '.webp': 'image/webp',
     };
     return mimeTypes[ext] || 'application/octet-stream';
+}
+
+/**
+ * 解析 Range 请求头
+ */
+function parseRangeHeader(rangeHeader: string, fileSize: number): { start: number; end: number } | null {
+    const matches = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader);
+    if (!matches) {
+        return null;
+    }
+
+    let start = matches[1] ? parseInt(matches[1], 10) : undefined;
+    let end = matches[2] ? parseInt(matches[2], 10) : undefined;
+
+    if (Number.isNaN(start as number)) {
+        start = undefined;
+    }
+    if (Number.isNaN(end as number)) {
+        end = undefined;
+    }
+
+    if (start === undefined && end === undefined) {
+        return null;
+    }
+
+    if (start === undefined) {
+        // 请求末尾的若干字节，例如 bytes=-500
+        const suffixLength = end ?? 0;
+        if (suffixLength <= 0) {
+            return null;
+        }
+        start = Math.max(fileSize - suffixLength, 0);
+        end = fileSize - 1;
+    } else {
+        if (start >= fileSize) {
+            return null;
+        }
+        if (end === undefined || end >= fileSize) {
+            end = fileSize - 1;
+        }
+    }
+
+    if (start > (end as number)) {
+        return null;
+    }
+
+    return { start, end: end as number };
 }
 
 /**
@@ -104,15 +151,48 @@ export async function registerAudioRoutes(server: FastifyInstance): Promise<void
                     return reply.redirect(302, publicUrl);
                 }
 
-                // 5. 本地模式：流式传输文件
-                const fileBuffer = await storage.readFile(relativePath);
-                const fileSize = fileBuffer.length;
+                // 5. 本地模式：支持 Range 的流式传输
+                if (!(storage instanceof LocalStorage)) {
+                    throw new Error('Local storage instance mismatch');
+                }
 
-                reply.header('Content-Type', getMimeType(fileName));
-                reply.header('Content-Length', fileSize);
-                reply.header('Accept-Ranges', 'bytes');
+                const fileSize = await storage.getFileSize(relativePath);
+                const rangeHeader = request.headers.range;
 
-                return reply.send(fileBuffer);
+                if (rangeHeader) {
+                    const range = parseRangeHeader(rangeHeader, fileSize);
+
+                    if (!range) {
+                        return reply
+                            .code(416)
+                            .header('Content-Range', `bytes */${fileSize}`)
+                            .send();
+                    }
+
+                    const chunkSize = range.end - range.start + 1;
+                    const stream = storage.createReadStream(relativePath, {
+                        start: range.start,
+                        end: range.end
+                    });
+
+                    reply
+                        .code(206)
+                        .header('Content-Range', `bytes ${range.start}-${range.end}/${fileSize}`)
+                        .header('Accept-Ranges', 'bytes')
+                        .header('Content-Length', chunkSize)
+                        .header('Content-Type', getMimeType(fileName));
+
+                    return reply.send(stream);
+                }
+
+                const stream = storage.createReadStream(relativePath);
+
+                reply
+                    .header('Content-Type', getMimeType(fileName))
+                    .header('Content-Length', fileSize)
+                    .header('Accept-Ranges', 'bytes');
+
+                return reply.send(stream);
 
             } catch (error: any) {
                 server.log.error({
