@@ -1,5 +1,31 @@
-audio
-node_modules
-CHANGELOG.md
-.feeds/
-dist
+# 依赖
+node_modules/
+
+# 构建输出
+dist/
+assets/web/
+
+# 环境变量
+.env
+.env.local
+.env.development
+
+# 测试文件
+test-*.js
+
+# AI 相关
+AGENTS.md
+CLAUDE.md
+openspec/*
+.claude/*
+
+# 数据库
+data/*server.log
+data/
+
+# 音频文件目录（用户数据）
+audio/
+
+# 日志文件（保留目录结构，忽略日志内容）
+logs/*.log
+logs/*.log.*
