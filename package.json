@@ -17,6 +17,7 @@
     "dev": "concurrently -n \"backend,frontend\" -c \"blue,green\" \"npm run dev:backend\" \"npm run dev:frontend\"",
     "tag": "node scripts/tag-version.js",
     "generate-changelog": "ts-node scripts/generate-changelog.ts",
+    "postinstall": "cd web && npm install",
     "docker:build": "docker build -t folder2podcast:v2 -t folder2podcast:latest-v2 .",
     "docker:build:all": "npm run build:all && docker build -t folder2podcast:v2 -t folder2podcast:latest-v2 .",
     "docker:test": "docker run -d --name folder2podcast-test-v2 -p 3100:3100 -v $HOME/Desktop/audio_books:/podcasts -e BASE_URL=http://localhost:3100 folder2podcast:v2",

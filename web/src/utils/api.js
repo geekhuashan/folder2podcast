@@ -5,15 +5,23 @@ const API_BASE = '/api';
 const getCredentials = () => {
   const username = localStorage.getItem('auth_username') || '';
   const password = localStorage.getItem('auth_password') || '';
+  if (!username || !password) {
+    console.warn('[Auth] 未找到认证信息', { username, password });
+  }
   return { username, password };
 };
 
 // 添加认证信息到 URL
 const addAuth = (url) => {
   const { username, password } = getCredentials();
-  if (!username || !password) return url;
+  if (!username || !password) {
+    console.warn('[Auth] 认证信息缺失，请求将不带认证', url);
+    return url;
+  }
   const separator = url.includes('?') ? '&' : '?';
-  return `${url}${separator}username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
+  const authUrl = `${url}${separator}username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
+  console.log('[Auth] 添加认证信息到请求');
+  return authUrl;
 };
 
 // 通用请求函数
@@ -25,7 +33,10 @@ async function request(url, options = {}) {
       headers['Content-Type'] = 'application/json';
     }
 
-    const response = await fetch(addAuth(url), {
+    const authUrl = addAuth(url);
+    console.log('[API Request]', authUrl); // 调试日志
+
+    const response = await fetch(authUrl, {
       ...options,
       headers,
     });
@@ -55,6 +66,7 @@ export const authAPI = {
     // 验证成功后保存到 localStorage
     localStorage.setItem('auth_username', username);
     localStorage.setItem('auth_password', password);
+    console.log('[Auth] 登录成功，已保存认证信息到 localStorage', { username });
 
     return result;
   },

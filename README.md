@@ -1,3 +1,6 @@
+[![SVG Banners](https://svg-banners.vercel.app/api?type=rainbow&text1=Folder2Podcast📻&width=800&height=400)](https://github.com/Akshay090/svg-banners)
+
+
 # Folder2Podcast RSS
 
 > 把任何音频变成私人播客，在任意播客客户端中收听
@@ -61,20 +64,35 @@
 ### 方式一：Docker 部署（推荐）
 
 ```bash
-# 1. 克隆项目
-git clone <repository-url>
-cd folder2podcast
+docker run -d \
+  --name folder2podcast \
+  --restart unless-stopped \
+  -p 3100:3100 \
+  -v ~/f2p/audio:/app/audio \
+  -v ~/f2p/data:/app/data \
+  -e BASE_URL=http://your-ip:3100 \
+  -e ADMIN_USERNAME=admin \
+  -e ADMIN_PASSWORD=admin \
+  yaotutu/folder2podcast:latest-v2
+```
 
-# 2. 配置环境变量
-cp .env.example .env
-# 编辑 .env，设置 BASE_URL（重要！RSS会使用此地址）
-# BASE_URL=http://192.168.88.100:3100
+> 访问 http://your-ip:3100/web/ 开始使用
 
-# 3. 启动服务
-docker-compose up -d
+**⚠️ BASE_URL 设置说明**
 
-# 4. 访问 Web 界面
-http://localhost:3100/web/
+RSS 订阅地址和音频资源会使用此 URL，请根据实际访问方式填写：
+
+| 访问场景 | BASE_URL 示例 |
+|---------|--------------|
+| 局域网访问 | `http://192.168.1.100:3100` |
+| 公网 IP | `http://123.45.67.89:3100` |
+| 域名 + 反向代理 | `https://podcast.yourdomain.com` |
+
+**开发版本**（包含最新功能）：
+
+如果需要体验最新功能，使用开发版镜像：
+```bash
+yaotutu/folder2podcast:dev-latest-v2
 ```
 
 ### 方式二：本地开发
@@ -85,13 +103,17 @@ npm install
 
 # 2. 配置环境变量
 cp .env.example .env
+# 编辑 .env，设置 BASE_URL（重要！RSS会使用此地址）
 
-# 3. 启动服务
-npm run dev:backend  # 后端（端口 3100）
-npm run dev:frontend # 前端（端口 3200）
+# 3. 给 bin 目录下的二进制文件添加可执行权限（B站下载功能需要）
+chmod +x bin/BBDown-*
 
-# 4. 访问
-http://localhost:3200/web/
+# 4. 启动服务
+npm run dev  # 同时启动前后端
+
+# 5. 访问
+# 开发模式：http://localhost:3200/web/
+# 生产构建：http://localhost:3100/web/
 ```
 
 ---
@@ -182,51 +204,12 @@ S3_PUBLIC_URL=https://cdn.example.com # 访问URL
 
 ---
 
-## 🚧 开发计划 (TODO)
+## 🚧 开发计划
 
-### 🤖 AI 功能增强
-
-#### AI 自动总结
-- [ ] 音频转文字：使用 Whisper API 自动转录音频内容
-- [ ] 智能摘要：基于转录内容生成剧集简介
-- [ ] 关键词提取：自动提取关键词标签
-
-#### AI 生成封面图
-- [ ] 播客封面生成：根据播客标题和描述自动生成封面
-- [ ] 剧集封面生成：根据剧集标题自动生成封面
-- [ ] 支持批量生成所有剧集封面
-
-**技术方案**：
-- OpenAI DALL-E 3 API
-- Stable Diffusion (本地部署)
-
-### 📹 视频平台支持扩展
-
-#### 已支持
-- ✅ Bilibili (BBDown)
-
-#### 待接入平台
-- [ ] YouTube - 使用 yt-dlp 下载
-- [ ] 抖音 - 使用 yt-dlp 下载
-- [ ] 西瓜视频 - 使用 yt-dlp 下载
-
-**技术实现**：
-- 统一视频下载适配器架构
-- yt-dlp 作为主要下载工具
-- 支持播放列表批量下载
-
-### 📅 开发计划
-
-#### 第一阶段：视频平台扩展
-1. 集成 yt-dlp
-2. 实现 YouTube 下载支持
-3. 实现抖音下载支持
-4. 实现西瓜视频下载支持
-
-#### 第二阶段：AI 功能
-1. 集成 Whisper API（音频转文字）
-2. 集成 OpenAI API（摘要生成）
-3. 集成 DALL-E 3（封面生成）
+- [ ] YouTube/抖音/西瓜视频下载支持（yt-dlp）
+- [ ] AI 音频转文字（Whisper）
+- [ ] AI 智能摘要生成
+- [ ] AI 自动生成封面图
 
 ---
 
