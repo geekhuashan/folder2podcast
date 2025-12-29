@@ -7,8 +7,6 @@ assets/web/
 
 # 环境变量
 .env
-.env.local
-.env.development
 
 # 测试文件
 test-*.js
