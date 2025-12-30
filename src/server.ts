@@ -115,20 +115,38 @@ export class PodcastServer {
         });
 
         this.server.get('/about', async (request, reply) => {
-          return reply.redirect(`http://localhost:${vitePort}/index.html`);
+          return reply.redirect(`http://localhost:${vitePort}/about.html`);
         });
       } else {
-        // 生产环境：重定向到静态文件
+        // 生产环境：直接返回 HTML 文件内容
+        const fs = await import('fs/promises');
+
         this.server.get('/', async (request, reply) => {
-          return reply.redirect('/web/app.html');
+          try {
+            const html = await fs.readFile(path.join(__dirname, '../assets/web/app.html'), 'utf-8');
+            return reply.type('text/html').send(html);
+          } catch (error) {
+            this.server.log.error('Error reading app.html:', error);
+            return reply.code(500).send({ error: 'Internal Server Error' });
+          }
         });
 
         this.server.get('/about', async (request, reply) => {
-          return reply.redirect('/web/index.html');
+          try {
+            const html = await fs.readFile(path.join(__dirname, '../assets/web/about.html'), 'utf-8');
+            return reply.type('text/html').send(html);
+          } catch (error) {
+            this.server.log.error('Error reading about.html:', error);
+            return reply.code(500).send({ error: 'Internal Server Error' });
+          }
         });
 
-        // 只拦截 /web 和 /web/ 目录访问（精确匹配）
-        // 其他 /web/* 路径交给静态文件服务处理
+        // 拦截所有 /web/*.html 文件（只允许静态资源通过）
+        this.server.get('/web/*.html', async (request, reply) => {
+          return reply.code(404).send({ error: 'Not Found' });
+        });
+
+        // 拦截 /web 和 /web/ 目录访问
         this.server.get('/web', async (request, reply) => {
           return reply.code(404).send({ error: 'Not Found' });
         });
@@ -166,7 +184,7 @@ export class PodcastServer {
         // 开发环境
         const vitePort = process.env.VITE_PORT || '3200';
         console.log(`✓ 管理界面: http://localhost:${vitePort}/app.html (Vite 开发服务器)`);
-        console.log(`✓ 介绍页面: http://localhost:${vitePort}/index.html (Vite 开发服务器)`);
+        console.log(`✓ 介绍页面: http://localhost:${vitePort}/about.html (Vite 开发服务器)`);
       }
       console.log('');
     } catch (error) {
