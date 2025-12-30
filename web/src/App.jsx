@@ -214,6 +214,40 @@ export default function App() {
 
                 {/* 右侧：用户信息 / 登录按钮 */}
                 <div style={{ display: 'flex', 'align-items': 'center', gap: '1rem', position: 'relative' }}>
+                  {/* 官网链接 */}
+                  <a
+                    href="/about"
+                    style={{
+                      display: 'flex',
+                      'align-items': 'center',
+                      gap: '0.5rem',
+                      padding: '0.5rem 1rem',
+                      border: '1px solid #e2e8f0',
+                      background: 'white',
+                      color: '#64748b',
+                      'border-radius': '0.5rem',
+                      cursor: 'pointer',
+                      'font-weight': '500',
+                      'font-size': '0.9375rem',
+                      transition: 'all 0.2s',
+                      'text-decoration': 'none'
+                    }}
+                    onMouseOver={(e) => {
+                      e.currentTarget.style.background = '#f8fafc';
+                      e.currentTarget.style.color = '#3b82f6';
+                    }}
+                    onMouseOut={(e) => {
+                      e.currentTarget.style.background = 'white';
+                      e.currentTarget.style.color = '#64748b';
+                    }}
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                      <polyline points="9 22 9 12 15 12 15 22"/>
+                    </svg>
+                    官网
+                  </a>
+
                   {/* 游客模式：直接显示登录按钮 */}
                   <Show when={!user()}>
                     <button

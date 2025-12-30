@@ -18,8 +18,12 @@ export async function registerConfigRoutes(server: FastifyInstance): Promise<voi
     const isDev = process.env.VITE_DEV_SERVER === 'true';
     const vitePort = process.env.VITE_PORT || '3200';
 
-    let webBaseUrl = `${baseUrl}/web`;
+    let webBaseUrl = baseUrl;
+    let webAppUrl = '/';
+    let webLandingUrl = '/about';
+
     if (isDev) {
+      // 开发环境：指向 Vite 开发服务器
       try {
         const url = new URL(baseUrl);
         url.port = vitePort;
@@ -27,14 +31,16 @@ export async function registerConfigRoutes(server: FastifyInstance): Promise<voi
       } catch {
         webBaseUrl = `http://localhost:${vitePort}`;
       }
+      webAppUrl = `${webBaseUrl}/app.html`;
+      webLandingUrl = `${webBaseUrl}/about.html`;
     }
 
     return {
       data: {
         baseUrl,
         webBaseUrl,
-        webAppUrl: `${webBaseUrl}/app.html`,
-        webLandingUrl: `${webBaseUrl}/index.html`,
+        webAppUrl,
+        webLandingUrl,
         feedBaseUrl: `${baseUrl}/feeds`,
       },
     };

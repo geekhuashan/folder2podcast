@@ -72,8 +72,8 @@ export default function LandingPage() {
   const [config, setConfig] = createSignal({
     baseUrl: window.location.origin,
     webBaseUrl: window.location.origin,
-    webAppUrl: 'app.html',
-    webLandingUrl: 'index.html',
+    webAppUrl: '/app.html',
+    webLandingUrl: '/about.html',
     feedBaseUrl: `${window.location.origin}/feeds`,
   });
 
