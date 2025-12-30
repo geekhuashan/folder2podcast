@@ -27,3 +27,4 @@ audio/
 # 日志文件（保留目录结构，忽略日志内容）
 logs/*.log
 logs/*.log.*
+.env.development.local

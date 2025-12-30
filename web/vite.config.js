@@ -39,9 +39,17 @@ export default defineConfig(({ command }) => {
         configureServer(server) {
           if (!isDev) return;
           server.middlewares.use((req, res, next) => {
+            // 根路径重定向到管理界面
             if (req.url === '/') {
               res.statusCode = 302;
               res.setHeader('Location', '/app.html');
+              res.end();
+              return;
+            }
+            // /about 重定向到介绍页面
+            if (req.url === '/about') {
+              res.statusCode = 302;
+              res.setHeader('Location', '/about.html');
               res.end();
               return;
             }

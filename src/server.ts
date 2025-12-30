@@ -71,6 +71,62 @@ export class PodcastServer {
       // 注册错误处理中间件
       this.server.setErrorHandler(errorHandler);
 
+      // ====== 页面路由（必须在静态文件服务之前注册）======
+
+      if (isDev) {
+        // 开发环境：重定向到 Vite 开发服务器
+        this.server.get('/', async (request, reply) => {
+          return reply.redirect(`http://localhost:${vitePort}/app.html`);
+        });
+
+        this.server.get('/about', async (request, reply) => {
+          return reply.redirect(`http://localhost:${vitePort}/about.html`);
+        });
+      } else {
+        // 生产环境：手动处理页面路由
+        const fs = await import('fs/promises');
+
+        // 主页 - 管理界面
+        this.server.get('/', async (request, reply) => {
+          try {
+            const html = await fs.readFile(path.join(__dirname, '../assets/web/app.html'), 'utf-8');
+            return reply.type('text/html').send(html);
+          } catch (error) {
+            this.server.log.error('Error reading app.html:', error);
+            return reply.code(500).send({ error: 'Internal Server Error' });
+          }
+        });
+
+        // 关于页面
+        this.server.get('/about', async (request, reply) => {
+          try {
+            const html = await fs.readFile(path.join(__dirname, '../assets/web/about.html'), 'utf-8');
+            return reply.type('text/html').send(html);
+          } catch (error) {
+            this.server.log.error('Error reading about.html:', error);
+            return reply.code(500).send({ error: 'Internal Server Error' });
+          }
+        });
+
+        // 拦截特定的 HTML 文件访问
+        this.server.get('/web/app.html', async (request, reply) => {
+          return reply.code(404).send({ error: 'Not Found' });
+        });
+
+        this.server.get('/web/about.html', async (request, reply) => {
+          return reply.code(404).send({ error: 'Not Found' });
+        });
+
+        // 拦截目录访问
+        this.server.get('/web', async (request, reply) => {
+          return reply.code(404).send({ error: 'Not Found' });
+        });
+
+        this.server.get('/web/', async (request, reply) => {
+          return reply.code(404).send({ error: 'Not Found' });
+        });
+      }
+
       // ====== 注册静态文件服务 ======
 
       // Web 界面和图片资源
@@ -105,56 +161,6 @@ export class PodcastServer {
 
       // 文件管理路由（上传、删除、重命名）
       await registerFileManagementRoutes(this.server);
-
-      // ====== 页面路由 ======
-
-      if (isDev) {
-        // 开发环境：重定向到 Vite 开发服务器
-        this.server.get('/', async (request, reply) => {
-          return reply.redirect(`http://localhost:${vitePort}/app.html`);
-        });
-
-        this.server.get('/about', async (request, reply) => {
-          return reply.redirect(`http://localhost:${vitePort}/about.html`);
-        });
-      } else {
-        // 生产环境：直接返回 HTML 文件内容
-        const fs = await import('fs/promises');
-
-        this.server.get('/', async (request, reply) => {
-          try {
-            const html = await fs.readFile(path.join(__dirname, '../assets/web/app.html'), 'utf-8');
-            return reply.type('text/html').send(html);
-          } catch (error) {
-            this.server.log.error('Error reading app.html:', error);
-            return reply.code(500).send({ error: 'Internal Server Error' });
-          }
-        });
-
-        this.server.get('/about', async (request, reply) => {
-          try {
-            const html = await fs.readFile(path.join(__dirname, '../assets/web/about.html'), 'utf-8');
-            return reply.type('text/html').send(html);
-          } catch (error) {
-            this.server.log.error('Error reading about.html:', error);
-            return reply.code(500).send({ error: 'Internal Server Error' });
-          }
-        });
-
-        // 拦截所有 /web/*.html 文件（只允许静态资源通过）
-        this.server.get('/web/*.html', async (request, reply) => {
-          return reply.code(404).send({ error: 'Not Found' });
-        });
-
-        // 拦截 /web 和 /web/ 目录访问
-        this.server.get('/web', async (request, reply) => {
-          return reply.code(404).send({ error: 'Not Found' });
-        });
-
-        this.server.get('/web/', async (request, reply) => {
-          return reply.code(404).send({ error: 'Not Found' });
-        });
-      }
 
       // ====== 显示启动信息 ======
       await this.displayStartupInfo();
