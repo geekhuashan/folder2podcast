@@ -7,7 +7,7 @@ WORKDIR /app
 
 # 复制后端 package 文件并安装依赖
 COPY package*.json ./
-RUN npm install
+RUN npm install --ignore-scripts
 
 # 复制源代码
 COPY src ./src
