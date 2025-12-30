@@ -5,9 +5,18 @@ FROM node:20-slim AS backend-builder
 
 WORKDIR /app
 
+# 安装编译依赖（用于编译 better-sqlite3 等 native 模块）
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    make \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
 # 复制后端 package 文件并安装依赖
 COPY package*.json ./
-RUN npm install --ignore-scripts
+# 先跳过脚本安装依赖，然后单独重新编译 better-sqlite3
+RUN npm install --ignore-scripts && \
+    npm rebuild better-sqlite3
 
 # 复制源代码
 COPY src ./src
