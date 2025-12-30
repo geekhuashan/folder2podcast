@@ -28,3 +28,4 @@ audio/
 logs/*.log
 logs/*.log.*
 .env.development.local
+logs/
