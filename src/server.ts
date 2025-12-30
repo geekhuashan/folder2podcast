@@ -106,37 +106,19 @@ export class PodcastServer {
       // 文件管理路由（上传、删除、重命名）
       await registerFileManagementRoutes(this.server);
 
+      // ====== 页面路由 ======
+
       if (isDev) {
-        // Dev: root to console, /about to landing
+        // 开发环境：重定向到 Vite 开发服务器
         this.server.get('/', async (request, reply) => {
           return reply.redirect(`http://localhost:${vitePort}/app.html`);
         });
 
         this.server.get('/about', async (request, reply) => {
           return reply.redirect(`http://localhost:${vitePort}/index.html`);
-        });
-
-        this.server.get('/about/', async (request, reply) => {
-          return reply.redirect(`http://localhost:${vitePort}/index.html`);
-        });
-
-        this.server.get('/web', async (request, reply) => {
-          return reply.redirect(`http://localhost:${vitePort}/app.html`);
-        });
-
-        this.server.get('/web/', async (request, reply) => {
-          return reply.redirect(`http://localhost:${vitePort}/app.html`);
-        });
-
-        this.server.get('/web/index.html', async (request, reply) => {
-          return reply.redirect(`http://localhost:${vitePort}/app.html`);
-        });
-
-        this.server.get('/web/app.html', async (request, reply) => {
-          return reply.redirect(`http://localhost:${vitePort}/app.html`);
         });
       } else {
-        // Prod: root to console, /about to landing
+        // 生产环境：重定向到静态文件
         this.server.get('/', async (request, reply) => {
           return reply.redirect('/web/app.html');
         });
@@ -145,20 +127,27 @@ export class PodcastServer {
           return reply.redirect('/web/index.html');
         });
 
-        this.server.get('/about/', async (request, reply) => {
-          return reply.redirect('/web/index.html');
-        });
-
+        // 拦截所有 /web/* 路径（除了 app.html 和 index.html）
+        // 防止用户直接访问静态文件目录
         this.server.get('/web', async (request, reply) => {
-          return reply.redirect('/web/app.html');
+          return reply.code(404).send({ error: 'Not Found' });
         });
 
         this.server.get('/web/', async (request, reply) => {
-          return reply.redirect('/web/app.html');
+          return reply.code(404).send({ error: 'Not Found' });
         });
 
-        this.server.get('/web/index.html', async (request, reply) => {
-          return reply.redirect('/web/app.html');
+        // 拦截其他 /web/* 路径（静态资源除外）
+        this.server.get('/web/*', async (request, reply) => {
+          const url = request.url;
+          // 只允许访问 .html, .js, .css, .png, .jpg, .svg 等静态资源
+          if (url === '/web/app.html' || url === '/web/index.html' ||
+              /\.(js|css|png|jpg|jpeg|svg|ico|woff|woff2|ttf|eot)$/.test(url)) {
+            // 放行静态资源，让 fastify-static 处理
+            return;
+          }
+          // 其他路径返回 404
+          return reply.code(404).send({ error: 'Not Found' });
         });
       }
 
@@ -184,13 +173,13 @@ export class PodcastServer {
 
       if (!isDev) {
         // 生产环境
-        console.log(`✓ 官网: ${this.baseUrl}/web/index.html`);
-        console.log(`✓ 管理界面: ${this.baseUrl}/web/app.html`);
+        console.log(`✓ 管理界面: ${this.baseUrl}/`);
+        console.log(`✓ 介绍页面: ${this.baseUrl}/about`);
       } else {
         // 开发环境
         const vitePort = process.env.VITE_PORT || '3200';
-        console.log(`✓ 官网: http://localhost:${vitePort}/ (Vite 开发服务器)`);
         console.log(`✓ 管理界面: http://localhost:${vitePort}/app.html (Vite 开发服务器)`);
+        console.log(`✓ 介绍页面: http://localhost:${vitePort}/index.html (Vite 开发服务器)`);
       }
       console.log('');
     } catch (error) {
