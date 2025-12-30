@@ -127,26 +127,13 @@ export class PodcastServer {
           return reply.redirect('/web/index.html');
         });
 
-        // 拦截所有 /web/* 路径（除了 app.html 和 index.html）
-        // 防止用户直接访问静态文件目录
+        // 只拦截 /web 和 /web/ 目录访问（精确匹配）
+        // 其他 /web/* 路径交给静态文件服务处理
         this.server.get('/web', async (request, reply) => {
           return reply.code(404).send({ error: 'Not Found' });
         });
 
         this.server.get('/web/', async (request, reply) => {
-          return reply.code(404).send({ error: 'Not Found' });
-        });
-
-        // 拦截其他 /web/* 路径（静态资源除外）
-        this.server.get('/web/*', async (request, reply) => {
-          const url = request.url;
-          // 只允许访问 .html, .js, .css, .png, .jpg, .svg 等静态资源
-          if (url === '/web/app.html' || url === '/web/index.html' ||
-              /\.(js|css|png|jpg|jpeg|svg|ico|woff|woff2|ttf|eot)$/.test(url)) {
-            // 放行静态资源，让 fastify-static 处理
-            return;
-          }
-          // 其他路径返回 404
           return reply.code(404).send({ error: 'Not Found' });
         });
       }
