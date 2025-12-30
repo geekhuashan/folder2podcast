@@ -174,7 +174,8 @@ export const buildBBDownArgs = (options: {
     // 构建参数数组
     const args: string[] = [
         url,                    // 视频 URL 或 ID (必需，放在第一位)
-        '--audio-only'          // 仅下载音频
+        '--audio-only',         // 仅下载音频
+        '--debug'               // 🔥 调试模式，输出详细错误信息
     ];
 
     // 如果配置了 BILIBILI_COOKIE，添加 -c 参数

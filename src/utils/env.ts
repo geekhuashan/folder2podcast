@@ -25,6 +25,17 @@ envFiles.forEach(file => {
     }
 });
 
+// 🔥 调试日志：检查环境变量加载状态
+if (process.env.BILIBILI_COOKIE) {
+    console.log('[Env] ✅ BILIBILI_COOKIE 已加载');
+} else {
+    console.log('[Env] ⚠️  BILIBILI_COOKIE 未加载');
+    console.log('[Env] 📂 工作目录:', process.cwd());
+    console.log('[Env] 📁 rootDir:', rootDir);
+    console.log('[Env] 📄 尝试加载的配置文件:', envFiles);
+    console.log('[Env] 📋 .env 文件是否存在:', fs.existsSync(path.join(rootDir, '.env')));
+}
+
 export interface EnvConfig {
     // 音频文件夹路径
     AUDIO_DIR: string;
