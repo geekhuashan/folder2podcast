@@ -166,7 +166,14 @@ export class BilibiliAdapter extends BaseDownloadAdapter {
                 selectPage
             });
 
-            this.log(`执行命令: ${bbdownPath} ${args.join(' ')}`);
+            // 🔥 详细日志：输出完整的命令参数
+            this.log(`=== BBDown 命令详情 ===`);
+            this.log(`BBDown 路径: ${bbdownPath}`);
+            this.log(`工作目录: ${process.cwd()}`);
+            this.log(`输出目录: ${outputDir}`);
+            this.log(`命令参数: ${JSON.stringify(args, null, 2)}`);
+            this.log(`完整命令: ${bbdownPath} ${args.map(a => a.includes(' ') ? `"${a}"` : a).join(' ')}`);
+            this.log(`=======================`);
 
             // 执行下载
             await this.executeBBDown(bbdownPath, args);
@@ -411,27 +418,30 @@ export class BilibiliAdapter extends BaseDownloadAdapter {
             let stdout = '';
             let stderr = '';
 
-            const process = spawn(bbdownPath, args);
+            // 🔥 关键修复：设置工作目录，确保 BBDown 在正确的目录运行
+            const bbdownProcess = spawn(bbdownPath, args, {
+                cwd: global.process.cwd()  // 使用当前进程的工作目录
+            });
 
-            process.stdout?.on('data', (data) => {
+            bbdownProcess.stdout?.on('data', (data: any) => {
                 const chunk = data.toString();
                 stdout += chunk;
                 // 输出所有 stdout 内容到控制台
                 this.log(chunk.trim(), 'info');
             });
 
-            process.stderr?.on('data', (data) => {
+            bbdownProcess.stderr?.on('data', (data: any) => {
                 const chunk = data.toString();
                 stderr += chunk;
                 // 输出所有 stderr 内容到控制台（通常是警告信息）
                 this.log(chunk.trim(), 'warn');
             });
 
-            process.on('error', (error) => {
+            bbdownProcess.on('error', (error: any) => {
                 reject(new Error(`执行 BBDown 失败: ${error.message}`));
             });
 
-            process.on('close', (code) => {
+            bbdownProcess.on('close', (code: any) => {
                 if (code !== 0) {
                     reject(new Error(`BBDown 退出码: ${code}\n${stderr || stdout}`));
                 } else {
