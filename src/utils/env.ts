@@ -54,6 +54,10 @@ export interface EnvConfig {
     S3_PUBLIC_URL?: string;
     // S3 Bucket 内路径前缀（可选，如 folder2podcast）
     S3_BUCKET_PREFIX?: string;
+
+    // ========== B站视频下载配置 ==========
+    // B站 Cookie（用于 BBDown 下载需要登录的视频）
+    BILIBILI_COOKIE?: string;
 }
 
 /**
@@ -93,5 +97,8 @@ export function getEnvConfig(): EnvConfig {
         S3_SECRET_ACCESS_KEY: process.env.S3_SECRET_ACCESS_KEY,
         S3_PUBLIC_URL: process.env.S3_PUBLIC_URL,
         S3_BUCKET_PREFIX: process.env.S3_BUCKET_PREFIX,
+
+        // ========== B站视频下载配置 ==========
+        BILIBILI_COOKIE: process.env.BILIBILI_COOKIE,
     };
 }

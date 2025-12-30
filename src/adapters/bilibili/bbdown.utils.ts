@@ -1,5 +1,6 @@
 import path from 'path';
 import { VideoInfo as AdapterVideoInfo } from '../base/download-adapter.interface';
+import { getEnvConfig } from '../../utils/env';
 
 /**
  * 根据当前平台和架构获取 BBDown 二进制文件路径
@@ -124,10 +125,15 @@ export const extractVideoId = (url: string): string | null => {
  * // => ['BV1qt4y1X7TW', '-info']
  */
 export const buildBBDownInfoArgs = (url: string): string[] => {
-    return [
-        url,        // 视频 URL 或 ID
-        '-info'     // 仅获取信息不下载
-    ];
+    const envConfig = getEnvConfig();
+    const args: string[] = [url, '-info'];
+
+    // 如果配置了 BILIBILI_COOKIE，添加 -c 参数
+    if (envConfig.BILIBILI_COOKIE) {
+        args.push('-c', envConfig.BILIBILI_COOKIE);
+    }
+
+    return args;
 };
 
 /**
@@ -163,12 +169,18 @@ export const buildBBDownArgs = (options: {
     selectPage?: string;
 }): string[] => {
     const { url, workDir, filePattern, selectPage } = options;
+    const envConfig = getEnvConfig();
 
     // 构建参数数组
     const args: string[] = [
         url,                    // 视频 URL 或 ID (必需，放在第一位)
         '--audio-only'          // 仅下载音频
     ];
+
+    // 如果配置了 BILIBILI_COOKIE，添加 -c 参数
+    if (envConfig.BILIBILI_COOKIE) {
+        args.push('-c', envConfig.BILIBILI_COOKIE);
+    }
 
     // 如果指定了分P选择，添加 -p 参数
     if (selectPage) {
@@ -664,12 +676,23 @@ export const buildCoverDownloadArgs = (
     workDir: string,
     fileName: string
 ): string[] => {
-    return [
+    const envConfig = getEnvConfig();
+    const args: string[] = [
         url,                  // 视频 URL 或 ID
         '--cover-only',       // 仅下载封面
+    ];
+
+    // 如果配置了 BILIBILI_COOKIE，添加 -c 参数
+    if (envConfig.BILIBILI_COOKIE) {
+        args.push('-c', envConfig.BILIBILI_COOKIE);
+    }
+
+    args.push(
         '--work-dir', workDir, // 工作目录
         '-F', fileName        // 文件名模板
-    ];
+    );
+
+    return args;
 };
 
 /**
