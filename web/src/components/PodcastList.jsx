@@ -10,7 +10,7 @@ import CreatePodcastModal from "./CreatePodcastModal";
 import DownloadVideoModal from "./DownloadVideoModal";
 import { useToast } from "./Toast";
 import { useModal } from "../contexts/ModalContext";
-import { getFeedUrl } from "../utils/url";
+import { getFullFeedUrl } from "../utils/url";
 
 // 复制到剪贴板功能
 const copyToClipboard = async (text) => {
@@ -371,20 +371,13 @@ export default function PodcastList(props) {
                       </p>
 
                       <div class="podcast-card__rss">
-                        <div style={{ flex: 1 }}>
-                          <div
-                            class="text-sm text-muted"
-                            style={{ "margin-bottom": "0.2rem" }}
-                          >
-                            RSS 订阅地址
-                          </div>
-                          <div class="rss-chip">
-                            {getFeedUrl(podcast.id)}
-                          </div>
+                        <div class="rss-chip" style={{ flex: 1, "min-width": 0 }}>
+                          {getFullFeedUrl(podcast.id)}
                         </div>
                         <button
                           class="btn btn-soft btn-sm"
                           onClick={(e) => handleCopyRSS(podcast, e)}
+                          style={{ "flex-shrink": 0 }}
                         >
                           {copiedPodcast() === podcast.dirName
                             ? "✓ 已复制"
