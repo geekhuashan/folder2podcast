@@ -8,11 +8,7 @@ version: '3.8'
 
 services:
   folder2podcast:
-    # 构建配置
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: folder2podcast:v2
+    image: folder2podcast:latest-v2
     container_name: folder2podcast-v2
 
     # 端口映射

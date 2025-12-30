@@ -22,6 +22,7 @@ import { registerFeedRoutes } from './routes/feed.routes';
 import { registerBilibiliRoutes } from './routes/bilibili.routes';
 import { registerFileManagementRoutes } from './routes/file-management.routes';
 import { registerAudioRoutes } from './routes/audio.routes';
+import { registerConfigRoutes } from './routes/config.routes';
 
 export class PodcastServer {
   private server: FastifyInstance;
@@ -45,6 +46,9 @@ export class PodcastServer {
    */
   public async initialize(): Promise<void> {
     try {
+      const vitePort = process.env.VITE_PORT || '3200';
+      const isDev = process.env.VITE_DEV_SERVER === 'true';
+
       // ====== 初始化数据库 ======
       await initDatabase();
 
@@ -81,6 +85,9 @@ export class PodcastServer {
       // 认证路由（登录验证）
       await authRoutes(this.server);
 
+      // 配置路由（公开）
+      await registerConfigRoutes(this.server);
+
       // 音频文件访问路由（支持用户隔离）
       await registerAudioRoutes(this.server);
 
@@ -99,10 +106,61 @@ export class PodcastServer {
       // 文件管理路由（上传、删除、重命名）
       await registerFileManagementRoutes(this.server);
 
-      // 根路径重定向到 Web 界面
-      this.server.get('/', async (request, reply) => {
-        return reply.redirect('/web/index.html');
-      });
+      if (isDev) {
+        // Dev: root to console, /about to landing
+        this.server.get('/', async (request, reply) => {
+          return reply.redirect(`http://localhost:${vitePort}/app.html`);
+        });
+
+        this.server.get('/about', async (request, reply) => {
+          return reply.redirect(`http://localhost:${vitePort}/index.html`);
+        });
+
+        this.server.get('/about/', async (request, reply) => {
+          return reply.redirect(`http://localhost:${vitePort}/index.html`);
+        });
+
+        this.server.get('/web', async (request, reply) => {
+          return reply.redirect(`http://localhost:${vitePort}/app.html`);
+        });
+
+        this.server.get('/web/', async (request, reply) => {
+          return reply.redirect(`http://localhost:${vitePort}/app.html`);
+        });
+
+        this.server.get('/web/index.html', async (request, reply) => {
+          return reply.redirect(`http://localhost:${vitePort}/app.html`);
+        });
+
+        this.server.get('/web/app.html', async (request, reply) => {
+          return reply.redirect(`http://localhost:${vitePort}/app.html`);
+        });
+      } else {
+        // Prod: root to console, /about to landing
+        this.server.get('/', async (request, reply) => {
+          return reply.redirect('/web/app.html');
+        });
+
+        this.server.get('/about', async (request, reply) => {
+          return reply.redirect('/web/index.html');
+        });
+
+        this.server.get('/about/', async (request, reply) => {
+          return reply.redirect('/web/index.html');
+        });
+
+        this.server.get('/web', async (request, reply) => {
+          return reply.redirect('/web/app.html');
+        });
+
+        this.server.get('/web/', async (request, reply) => {
+          return reply.redirect('/web/app.html');
+        });
+
+        this.server.get('/web/index.html', async (request, reply) => {
+          return reply.redirect('/web/app.html');
+        });
+      }
 
       // ====== 显示启动信息 ======
       await this.displayStartupInfo();
@@ -118,7 +176,7 @@ export class PodcastServer {
   private async displayStartupInfo(): Promise<void> {
     try {
       const config = getEnvConfig();
-      const isDev = process.env.NODE_ENV === 'development';
+      const isDev = process.env.VITE_DEV_SERVER === 'true';
 
       console.log(`\n✓ 数据库已初始化`);
       console.log(`✓ 默认用户: admin / admin`);
@@ -126,11 +184,13 @@ export class PodcastServer {
 
       if (!isDev) {
         // 生产环境
-        console.log(`✓ Web 界面: ${this.baseUrl}/web/index.html`);
+        console.log(`✓ 官网: ${this.baseUrl}/web/index.html`);
+        console.log(`✓ 管理界面: ${this.baseUrl}/web/app.html`);
       } else {
         // 开发环境
         const vitePort = process.env.VITE_PORT || '3200';
-        console.log(`✓ Web 界面: http://localhost:${vitePort}/web/ (Vite 开发服务器)`);
+        console.log(`✓ 官网: http://localhost:${vitePort}/ (Vite 开发服务器)`);
+        console.log(`✓ 管理界面: http://localhost:${vitePort}/app.html (Vite 开发服务器)`);
       }
       console.log('');
     } catch (error) {
@@ -168,4 +228,3 @@ export class PodcastServer {
     return this.audioDir;
   }
 }
-

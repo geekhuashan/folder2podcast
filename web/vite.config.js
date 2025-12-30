@@ -28,38 +28,60 @@ if (!BACKEND_URL.includes(':3100') && !BACKEND_URL.match(/:\d+$/)) {
 
 console.log('[Vite Config] BACKEND_URL:', BACKEND_URL);
 
-export default defineConfig({
-  plugins: [solidPlugin()],
-  base: '/web/',
-  // 定义全局常量，将后端 URL 传递给前端
-  define: {
-    __BACKEND_URL__: JSON.stringify(BACKEND_URL)
-  },
-  server: {
-    host: '0.0.0.0', // 允许外部访问
-    port: parseInt(VITE_PORT),
-    proxy: {
-      '/api': {
-        target: BACKEND_URL,
-        changeOrigin: true
-      },
-      '/feeds': {
-        target: BACKEND_URL,
-        changeOrigin: true
-      },
-      '/audio': {
-        target: BACKEND_URL,
-        changeOrigin: true
+export default defineConfig(({ command }) => {
+  const isDev = command === 'serve';
+
+  return {
+    plugins: [
+      solidPlugin(),
+      {
+        name: 'dev-root-redirect',
+        configureServer(server) {
+          if (!isDev) return;
+          server.middlewares.use((req, res, next) => {
+            if (req.url === '/') {
+              res.statusCode = 302;
+              res.setHeader('Location', '/app.html');
+              res.end();
+              return;
+            }
+            next();
+          });
+        }
+      }
+    ],
+    base: isDev ? '/' : '/web/',
+    // 定义全局常量，将后端 URL 传递给前端
+    define: {
+      __BACKEND_URL__: JSON.stringify(BACKEND_URL)
+    },
+    server: {
+      host: '0.0.0.0', // 允许外部访问
+      port: parseInt(VITE_PORT),
+      proxy: {
+        '/api': {
+          target: BACKEND_URL,
+          changeOrigin: true
+        },
+        '/feeds': {
+          target: BACKEND_URL,
+          changeOrigin: true
+        },
+        '/audio': {
+          target: BACKEND_URL,
+          changeOrigin: true
+        }
+      }
+    },
+    build: {
+      outDir: path.resolve(__dirname, '../assets/web'),
+      emptyOutDir: true,
+      rollupOptions: {
+        input: {
+          main: path.resolve(__dirname, 'index.html'),
+          app: path.resolve(__dirname, 'app.html')
+        }
       }
     }
-  },
-  build: {
-    outDir: path.resolve(__dirname, '../assets/web'),
-    emptyOutDir: true,
-    rollupOptions: {
-      input: {
-        main: path.resolve(__dirname, 'index.html')
-      }
-    }
-  }
+  };
 });
