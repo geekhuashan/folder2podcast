@@ -1,0 +1,1 @@
+ALTER TABLE `podcasts` ADD `inheritance_enabled` integer DEFAULT true;

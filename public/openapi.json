@@ -1,0 +1,1423 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Folder2Podcast API",
+    "version": "1.0.0",
+    "description": "将文件夹转换为播客的 RESTful API 文档"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3100/api",
+      "description": "本地开发服务器"
+    },
+    {
+      "url": "http://localhost:3100/api",
+      "description": "生产环境"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "AccessKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Access-Key",
+        "description": "用户访问密钥（通过 /api/v1/auth/login 获取）"
+      }
+    },
+    "schemas": {
+      "PodcastIdParam": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "播客ID"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "Podcast": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "播客ID"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "用户ID"
+          },
+          "dirName": {
+            "type": "string",
+            "description": "目录名"
+          },
+          "title": {
+            "type": "string",
+            "description": "播客标题"
+          },
+          "description": {
+            "type": "string",
+            "description": "播客描述"
+          },
+          "author": {
+            "type": "string",
+            "description": "作者"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "nullable": true,
+            "description": "联系邮箱"
+          },
+          "websiteUrl": {
+            "type": "string",
+            "format": "uri",
+            "nullable": true,
+            "description": "网站URL"
+          },
+          "language": {
+            "type": "string",
+            "default": "zh-cn",
+            "description": "语言"
+          },
+          "category": {
+            "type": "string",
+            "default": "Technology",
+            "description": "分类"
+          },
+          "explicit": {
+            "type": "boolean",
+            "default": false,
+            "description": "是否包含敏感内容"
+          },
+          "coverImage": {
+            "type": "string",
+            "nullable": true,
+            "description": "封面图片URL"
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "创建时间"
+          },
+          "updatedAt": {
+            "type": "string",
+            "description": "更新时间"
+          }
+        },
+        "required": [
+          "id",
+          "userId",
+          "dirName",
+          "title",
+          "description",
+          "author",
+          "language",
+          "category",
+          "explicit",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "CreatePodcastRequest": {
+        "type": "object",
+        "properties": {
+          "dirName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "pattern": "^[a-zA-Z0-9_-]+$",
+            "description": "目录名（URL友好）"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "播客标题"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 1000,
+            "nullable": true,
+            "default": "",
+            "description": "播客描述"
+          },
+          "author": {
+            "type": "string",
+            "maxLength": 100,
+            "nullable": true,
+            "default": "",
+            "description": "作者"
+          },
+          "email": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "email"
+              },
+              {
+                "type": "string",
+                "enum": [
+                  ""
+                ]
+              }
+            ],
+            "nullable": true,
+            "description": "联系邮箱"
+          },
+          "websiteUrl": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "uri"
+              },
+              {
+                "type": "string",
+                "enum": [
+                  ""
+                ]
+              }
+            ],
+            "nullable": true,
+            "description": "网站URL"
+          },
+          "language": {
+            "type": "string",
+            "default": "zh-CN",
+            "description": "语言代码"
+          },
+          "category": {
+            "type": "string",
+            "default": "Technology",
+            "description": "播客分类"
+          },
+          "explicit": {
+            "type": "boolean",
+            "default": false,
+            "description": "是否包含敏感内容"
+          },
+          "inheritanceEnabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "剧集是否继承播客设置"
+          }
+        },
+        "required": [
+          "dirName",
+          "title",
+          "language",
+          "category",
+          "explicit",
+          "inheritanceEnabled"
+        ]
+      },
+      "Episode": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "剧集ID"
+          },
+          "podcastId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "播客ID"
+          },
+          "title": {
+            "type": "string",
+            "description": "剧集标题"
+          },
+          "description": {
+            "type": "string",
+            "description": "剧集描述"
+          },
+          "audioUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "音频URL"
+          },
+          "duration": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "时长（秒）"
+          },
+          "fileSize": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "文件大小（字节）"
+          },
+          "mimeType": {
+            "type": "string",
+            "description": "MIME类型"
+          },
+          "coverImage": {
+            "type": "string",
+            "nullable": true,
+            "description": "封面图片URL"
+          },
+          "episodeNumber": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "剧集编号"
+          },
+          "seasonNumber": {
+            "type": "integer",
+            "minimum": 1,
+            "nullable": true,
+            "description": "季号"
+          },
+          "explicit": {
+            "type": "boolean",
+            "default": false,
+            "description": "是否包含敏感内容"
+          },
+          "publishedAt": {
+            "type": "string",
+            "description": "发布时间"
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "创建时间"
+          },
+          "updatedAt": {
+            "type": "string",
+            "description": "更新时间"
+          }
+        },
+        "required": [
+          "id",
+          "podcastId",
+          "title",
+          "description",
+          "audioUrl",
+          "duration",
+          "fileSize",
+          "mimeType",
+          "episodeNumber",
+          "explicit",
+          "publishedAt",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "EpisodeListResponse": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/Episode"
+        }
+      },
+      "EpisodeIdParam": {
+        "type": "object",
+        "properties": {
+          "episodeId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "剧集ID"
+          }
+        },
+        "required": [
+          "episodeId"
+        ]
+      },
+      "DeletePodcastResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "删除成功消息"
+          },
+          "filesDeleted": {
+            "type": "boolean",
+            "description": "是否删除了文件"
+          }
+        },
+        "required": [
+          "message",
+          "filesDeleted"
+        ]
+      },
+      "UpdateEpisodeRequest": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "nullable": true,
+            "description": "剧集标题"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000,
+            "nullable": true,
+            "description": "剧集描述"
+          },
+          "sortOrder": {
+            "type": "integer",
+            "minimum": 1,
+            "nullable": true,
+            "description": "排序顺序"
+          },
+          "pubDate": {
+            "type": "string",
+            "nullable": true,
+            "description": "发布日期"
+          }
+        }
+      },
+      "DeleteEpisodeResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "删除成功消息"
+          },
+          "deletedEpisodeId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "已删除的剧集ID"
+          }
+        },
+        "required": [
+          "message",
+          "deletedEpisodeId"
+        ]
+      },
+      "ReorderEpisodesRequest": {
+        "type": "object",
+        "properties": {
+          "episodeIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "minItems": 1,
+            "description": "剧集ID列表（按新顺序）"
+          }
+        },
+        "required": [
+          "episodeIds"
+        ]
+      },
+      "ReorderEpisodesResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "重排序成功消息"
+          },
+          "updatedCount": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "更新的剧集数量"
+          }
+        },
+        "required": [
+          "message",
+          "updatedCount"
+        ]
+      },
+      "SortStrategy": {
+        "type": "string",
+        "enum": [
+          "prefix",
+          "suffix",
+          "first",
+          "last",
+          "date"
+        ],
+        "description": "排序策略"
+      },
+      "ReorderAction": {
+        "type": "string",
+        "enum": [
+          "preview",
+          "apply"
+        ],
+        "description": "排序动作：preview=预览，apply=应用"
+      },
+      "ReorderEpisodesRequestV2": {
+        "type": "object",
+        "properties": {
+          "strategy": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SortStrategy"
+              }
+            ],
+            "description": "排序策略"
+          },
+          "action": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReorderAction"
+              }
+            ],
+            "description": "排序动作"
+          }
+        },
+        "required": [
+          "strategy",
+          "action"
+        ]
+      },
+      "ReorderPreviewItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "剧集ID"
+          },
+          "title": {
+            "type": "string",
+            "description": "剧集标题"
+          },
+          "oldSortOrder": {
+            "type": "integer",
+            "description": "原排序号"
+          },
+          "newSortOrder": {
+            "type": "integer",
+            "description": "新排序号"
+          },
+          "changed": {
+            "type": "boolean",
+            "description": "是否发生变化"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "oldSortOrder",
+          "newSortOrder",
+          "changed"
+        ]
+      },
+      "ReorderPreviewResponse": {
+        "type": "object",
+        "properties": {
+          "strategy": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SortStrategy"
+              }
+            ],
+            "description": "排序策略"
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "总剧集数"
+          },
+          "changed": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "变化数量"
+          },
+          "episodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReorderPreviewItem"
+            },
+            "description": "剧集列表"
+          }
+        },
+        "required": [
+          "strategy",
+          "total",
+          "changed",
+          "episodes"
+        ]
+      },
+      "ReorderApplyResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "重排序成功消息"
+          },
+          "strategy": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SortStrategy"
+              }
+            ],
+            "description": "使用的排序策略"
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "总剧集数"
+          },
+          "changed": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "更新数量"
+          }
+        },
+        "required": [
+          "message",
+          "strategy",
+          "total",
+          "changed"
+        ]
+      },
+      "UploadEpisodeCoverResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "上传成功消息"
+          },
+          "coverUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "封面URL"
+          },
+          "coverFileName": {
+            "type": "string",
+            "description": "封面文件名"
+          }
+        },
+        "required": [
+          "message",
+          "coverUrl",
+          "coverFileName"
+        ]
+      },
+      "DeleteEpisodeCoverResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "删除成功消息"
+          }
+        },
+        "required": [
+          "message"
+        ]
+      },
+      "UploadAudioResponse": {
+        "type": "object",
+        "properties": {
+          "fileName": {
+            "type": "string",
+            "description": "文件名"
+          },
+          "fileSize": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "文件大小（字节）"
+          },
+          "message": {
+            "type": "string",
+            "description": "上传成功消息"
+          }
+        },
+        "required": [
+          "fileName",
+          "fileSize",
+          "message"
+        ]
+      },
+      "EpisodesDataResponse": {
+        "type": "object",
+        "properties": {
+          "episodes": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/EpisodeListResponse"
+              }
+            ],
+            "description": "剧集列表"
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "剧集总数"
+          }
+        },
+        "required": [
+          "episodes",
+          "total"
+        ]
+      },
+      "PodcastWithFeedUrl": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "播客ID"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "用户ID"
+          },
+          "dirName": {
+            "type": "string",
+            "description": "目录名"
+          },
+          "title": {
+            "type": "string",
+            "description": "播客标题"
+          },
+          "description": {
+            "type": "string",
+            "description": "播客描述"
+          },
+          "author": {
+            "type": "string",
+            "description": "作者"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "nullable": true,
+            "description": "联系邮箱"
+          },
+          "websiteUrl": {
+            "type": "string",
+            "format": "uri",
+            "nullable": true,
+            "description": "网站URL"
+          },
+          "language": {
+            "type": "string",
+            "default": "zh-cn",
+            "description": "语言"
+          },
+          "category": {
+            "type": "string",
+            "default": "Technology",
+            "description": "分类"
+          },
+          "explicit": {
+            "type": "boolean",
+            "default": false,
+            "description": "是否包含敏感内容"
+          },
+          "coverImage": {
+            "type": "string",
+            "nullable": true,
+            "description": "封面图片URL"
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "创建时间"
+          },
+          "updatedAt": {
+            "type": "string",
+            "description": "更新时间"
+          },
+          "feedUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "RSS Feed URL"
+          }
+        },
+        "required": [
+          "id",
+          "userId",
+          "dirName",
+          "title",
+          "description",
+          "author",
+          "language",
+          "category",
+          "explicit",
+          "createdAt",
+          "updatedAt",
+          "feedUrl"
+        ]
+      },
+      "PodcastListResponse": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/PodcastWithFeedUrl"
+        }
+      }
+    },
+    "responses": {
+      "400": {
+        "description": "Bad Request",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "error": {
+                  "type": "string",
+                  "example": "Invalid request parameters"
+                },
+                "code": {
+                  "type": "string",
+                  "example": "400"
+                }
+              }
+            }
+          }
+        }
+      },
+      "401": {
+        "description": "Unauthorized",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "error": {
+                  "type": "string",
+                  "example": "Authentication required"
+                },
+                "code": {
+                  "type": "string",
+                  "example": "401"
+                }
+              }
+            }
+          }
+        }
+      },
+      "403": {
+        "description": "Forbidden",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "error": {
+                  "type": "string",
+                  "example": "Access denied"
+                },
+                "code": {
+                  "type": "string",
+                  "example": "403"
+                }
+              }
+            }
+          }
+        }
+      },
+      "404": {
+        "description": "Not Found",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "error": {
+                  "type": "string",
+                  "example": "Resource not found"
+                },
+                "code": {
+                  "type": "string",
+                  "example": "404"
+                }
+              }
+            }
+          }
+        }
+      },
+      "409": {
+        "description": "Conflict",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "error": {
+                  "type": "string",
+                  "example": "Resource already exists"
+                },
+                "code": {
+                  "type": "string",
+                  "example": "409"
+                }
+              }
+            }
+          }
+        }
+      },
+      "500": {
+        "description": "Internal Server Error",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "error": {
+                  "type": "string",
+                  "example": "An unexpected error occurred"
+                },
+                "code": {
+                  "type": "string",
+                  "example": "500"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/audio/{userId}/{podcastDir}/{fileName}": {
+      "get": {
+        "operationId": "get-audio-{userId}-{podcastDir}-{fileName}",
+        "summary": "GET /api/audio/[userId]/[podcastDir]/[fileName]",
+        "description": "",
+        "tags": [
+          "Audio"
+        ],
+        "parameters": [],
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/v1/podcasts": {
+      "get": {
+        "operationId": "get-v1-podcasts",
+        "summary": "获取播客列表",
+        "description": "获取当前用户的所有播客",
+        "tags": [
+          "V1"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/200 - SuccessResponse(PodcastListResponse) - 成功返回播客列表"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      },
+      "post": {
+        "operationId": "post-v1-podcasts",
+        "summary": "创建播客",
+        "description": "创建新的播客频道",
+        "tags": [
+          "V1"
+        ],
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/201 - SuccessResponse(PodcastWithFeedUrl) - 创建成功"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/v1/upload": {
+      "post": {
+        "operationId": "post-v1-upload",
+        "summary": "上传音频文件",
+        "description": "上传音频文件到指定播客（支持 MP3、M4A、WAV、FLAC、OGG、AAC）",
+        "tags": [
+          "V1"
+        ],
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/201 - SuccessResponse(UploadAudioResponse) - 上传成功"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/v1/auth/login": {
+      "post": {
+        "operationId": "post-v1-auth-login",
+        "summary": "用户登录",
+        "description": "验证用户名和密码，返回访问密钥（Access Key）",
+        "tags": [
+          "V1"
+        ],
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/200 - SuccessResponse(LoginResponseData) - 登录成功"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/v1/auth/me": {
+      "get": {
+        "operationId": "get-v1-auth-me",
+        "summary": "获取当前用户信息",
+        "description": "",
+        "tags": [
+          "V1"
+        ],
+        "parameters": [],
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/v1/auth/register": {
+      "post": {
+        "operationId": "post-v1-auth-register",
+        "summary": "用户注册",
+        "description": "创建新用户账户并返回访问密钥",
+        "tags": [
+          "V1"
+        ],
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/201 - SuccessResponse(RegisterResponseData) - 注册成功"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/v1/podcasts/{username}/{dirName}": {
+      "get": {
+        "operationId": "get-v1-podcasts-{username}-{dirName}",
+        "summary": "获取播客详情",
+        "description": "获取指定播客的详细信息，包括剧集数量",
+        "tags": [
+          "V1"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/200 - SuccessResponse(PodcastDetailResponse) - 成功返回播客详情"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      },
+      "put": {
+        "operationId": "put-v1-podcasts-{username}-{dirName}",
+        "summary": "更新播客元数据",
+        "description": "更新播客的标题、描述、dirName 等信息",
+        "tags": [
+          "V1"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/200 - SuccessResponse(PodcastWithFeedUrl) - 更新成功"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "delete-v1-podcasts-{username}-{dirName}",
+        "summary": "删除播客",
+        "description": "删除播客及其所有剧集（可选删除文件）",
+        "tags": [
+          "V1"
+        ],
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/200 - SuccessResponse(DeletePodcastResponse) - 删除成功"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/v1/podcasts/{username}/{dirName}/cover": {
+      "post": {
+        "operationId": "post-v1-podcasts-{username}-{dirName}-cover",
+        "summary": "上传播客封面",
+        "description": "为播客上传封面图片（支持 JPEG、PNG、WebP，最大 10MB）",
+        "tags": [
+          "V1"
+        ],
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/200 - SuccessResponse - 上传成功"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "delete-v1-podcasts-{username}-{dirName}-cover",
+        "summary": "删除播客封面",
+        "description": "删除播客的封面图片",
+        "tags": [
+          "V1"
+        ],
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/200 - SuccessResponse - 删除成功"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/v1/podcasts/{username}/{dirName}/episodes": {
+      "get": {
+        "operationId": "get-v1-podcasts-{username}-{dirName}-episodes",
+        "summary": "获取剧集列表",
+        "description": "获取指定播客的所有剧集",
+        "tags": [
+          "V1"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/200 - SuccessResponse(EpisodesDataResponse) - 成功返回剧集列表"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/v1/podcasts/{username}/{dirName}/episodes/{episodeId}": {
+      "put": {
+        "operationId": "put-v1-podcasts-{username}-{dirName}-episodes-{episodeId}",
+        "summary": "更新剧集元数据",
+        "description": "更新剧集的标题、描述、排序等信息",
+        "tags": [
+          "V1"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "schema": {
+              "type": "string",
+              "description": "播客ID"
+            },
+            "required": true,
+            "description": "播客ID",
+            "example": "123"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/200 - SuccessResponse(Episode) - 更新成功"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "delete-v1-podcasts-{username}-{dirName}-episodes-{episodeId}",
+        "summary": "删除剧集",
+        "description": "删除剧集及其相关文件（音频、封面）",
+        "tags": [
+          "V1"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "schema": {
+              "type": "string",
+              "description": "播客ID"
+            },
+            "required": true,
+            "description": "播客ID",
+            "example": "123"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/200 - SuccessResponse(DeleteEpisodeResponse) - 删除成功"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/v1/podcasts/{username}/{dirName}/episodes/reorder": {
+      "post": {
+        "operationId": "post-v1-podcasts-{username}-{dirName}-episodes-reorder",
+        "summary": "剧集重排序",
+        "description": "根据策略重新排序剧集（支持预览和应用两种模式）",
+        "tags": [
+          "V1"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "schema": {
+              "type": "string",
+              "description": "播客ID"
+            },
+            "required": true,
+            "description": "播客ID",
+            "example": "123"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/200 - SuccessResponse(ReorderPreviewResponse | ReorderApplyResponse) - 成功"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/v1/podcasts/{username}/{dirName}/episodes/{episodeId}/cover": {
+      "post": {
+        "operationId": "post-v1-podcasts-{username}-{dirName}-episodes-{episodeId}-cover",
+        "summary": "上传剧集封面",
+        "description": "为剧集上传封面图片（支持 JPEG、PNG、WebP，最大 10MB）",
+        "tags": [
+          "V1"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "schema": {
+              "type": "string",
+              "description": "播客ID"
+            },
+            "required": true,
+            "description": "播客ID",
+            "example": "123"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/200 - SuccessResponse(UploadEpisodeCoverResponse) - 上传成功"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "delete-v1-podcasts-{username}-{dirName}-episodes-{episodeId}-cover",
+        "summary": "删除剧集封面",
+        "description": "删除剧集的封面图片",
+        "tags": [
+          "V1"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "schema": {
+              "type": "string",
+              "description": "播客ID"
+            },
+            "required": true,
+            "description": "播客ID",
+            "example": "123"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/200 - SuccessResponse(DeleteEpisodeCoverResponse) - 删除成功"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    }
+  }
+}

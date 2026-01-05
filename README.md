@@ -1,218 +1,36 @@
-[![SVG Banners](https://svg-banners.vercel.app/api?type=rainbow&text1=Folder2Podcast📻&width=800&height=400)](https://github.com/Akshay090/svg-banners)
+This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Getting Started
 
-# Folder2Podcast RSS
-
-> 把任何音频变成私人播客，在任意播客客户端中收听
-
-**核心价值**：上传本地音频或粘贴视频链接 → 自动生成 RSS → 在手机/平板/电脑的播客客户端中订阅收听
-
----
-
-## ✨ 为什么选择 Folder2Podcast？
-
-### 🎯 突破播客客户端限制
-- ❌ 播客客户端（Apple Podcast、Spotify）只能订阅公开 RSS
-- ✅ 现在可以"订阅"你自己的本地音频和视频内容
-- ✅ 支持断点续听、倍速播放、播放列表等播客客户端所有功能
-
-### 📁 极简操作 - 3 步创建播客
-1. **上传文件夹** - 拖入整个音频文件夹
-2. **复制 RSS 链接** - 一键复制
-3. **客户端订阅** - 在任意播客客户端中粘贴订阅
-
-### 🎬 视频转音频 - 粘贴链接即可
-- 📺 支持 B站、YouTube、抖音等主流视频平台
-- 🎵 自动提取音频，保持高质量
-- 📋 批量下载整个播放列表
-- ⚡ 后台自动处理，无需等待
-
-### 💾 完全私有可控
-- 🔒 数据存储在你自己的服务器，不依赖第三方
-- 👥 多用户隔离，每人独立的播客空间
-- ☁️ 支持本地存储和 S3 云存储
-- 🛡️ 你的内容只有你能访问
-
-### 🎨 灵活的元数据管理
-- 为每个剧集单独设置标题、描述、封面
-- 自定义发布时间，控制剧集顺序
-- 所有修改实时生效，RSS 自动更新
-
----
-
-## 🎯 适用场景
-
-### 场景一：本地音乐转播客 🎵
-```
-100首本地音乐 → 上传文件夹 → 生成RSS → 开车时随机播放
-```
-
-### 场景二：有声书管理 📖
-```
-10部有声书（每部50集） → 每部创建一个播客 → 手机上像听播客一样听
-```
-
-### 场景三：个人录音整理 🎙️
-```
-会议记录、访谈、日记 → 上传音频 → 添加标题描述 → 随时回顾
-```
-
----
-
-## 🚀 快速开始
-
-### 方式一：Docker 部署（推荐）
+First, run the development server:
 
 ```bash
-docker run -d \
-  --name folder2podcast \
-  --restart unless-stopped \
-  -p 3100:3100 \
-  -v ~/f2p/audio:/app/audio \
-  -v ~/f2p/data:/app/data \
-  -e BASE_URL=http://your-ip:3100 \
-  -e ADMIN_USERNAME=admin \
-  -e ADMIN_PASSWORD=admin \
-  yaotutu/folder2podcast:latest-v2
+npm run dev
+# or
+yarn dev
+# or
+pnpm dev
+# or
+bun dev
 ```
 
-> 访问 http://your-ip:3100/web/ 开始使用
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-**⚠️ BASE_URL 设置说明**
+You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-RSS 订阅地址和音频资源会使用此 URL，请根据实际访问方式填写：
+This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-| 访问场景 | BASE_URL 示例 |
-|---------|--------------|
-| 局域网访问 | `http://192.168.1.100:3100` |
-| 公网 IP | `http://123.45.67.89:3100` |
-| 域名 + 反向代理 | `https://podcast.yourdomain.com` |
+## Learn More
 
-**开发版本**（包含最新功能）：
+To learn more about Next.js, take a look at the following resources:
 
-如果需要体验最新功能，使用开发版镜像：
-```bash
-yaotutu/folder2podcast:dev-latest-v2
-```
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 
-### 方式二：本地开发
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-```bash
-# 1. 安装依赖
-npm install
+## Deploy on Vercel
 
-# 2. 配置环境变量
-cp .env.example .env
-# 编辑 .env，设置 BASE_URL（重要！RSS会使用此地址）
+The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
-# 3. 给 bin 目录下的二进制文件添加可执行权限（B站下载功能需要）
-chmod +x bin/BBDown-*
-
-# 4. 启动服务
-npm run dev  # 同时启动前后端
-
-# 5. 访问
-# 开发模式：http://localhost:3200/web/
-# 生产构建：http://localhost:3100/web/
-```
-
----
-
-## 💡 如何使用
-
-### 创建播客（3种方式）
-
-**1. 上传整个文件夹（最快）**
-- 点击"📁 上传文件夹"
-- 选择包含音频的文件夹
-- 系统自动创建播客并上传所有文件
-
-**2. 粘贴视频链接**
-- 点击"📥 下载视频"
-- 粘贴 B站/YouTube 视频链接
-- 自动下载并转换为音频播客
-
-**3. 手动创建播客**
-- 点击"+ 创建新播客"
-- 填写名称和描述
-- 逐个上传音频文件
-
-### 订阅播客
-
-1. 在播客列表中复制 RSS 链接
-2. 在播客客户端（Apple Podcast、Pocket Casts 等）中添加订阅
-3. 开始收听！
-
-### 管理元数据
-
-- 点击音频文件的"✏️ 编辑元数据"
-- 修改标题、描述、发布时间
-- 上传剧集封面图片
-- 保存后 RSS 自动更新
-
----
-
-## ⚙️ 环境变量
-
-```bash
-# 服务器配置（重要）
-BASE_URL=http://192.168.88.100:3100  # 服务器地址，RSS会使用
-PORT=3100                             # 服务端口
-AUDIO_DIR=./audio                     # 音频存储路径
-
-# S3 云存储（可选）
-STORAGE_TYPE=local                    # 存储类型：local 或 s3
-S3_BUCKET=your-bucket                 # S3 存储桶
-S3_REGION=us-east-1                   # S3 区域
-S3_ENDPOINT=https://s3.amazonaws.com  # S3 端点
-S3_ACCESS_KEY_ID=your-key             # 访问密钥
-S3_SECRET_ACCESS_KEY=your-secret      # 密钥
-S3_PUBLIC_URL=https://cdn.example.com # 访问URL
-```
-
----
-
-## 📦 核心功能
-
-- ✅ **文件夹上传** - 批量上传本地音频
-- ✅ **视频转音频** - 支持主流视频平台
-- ✅ **RSS 生成** - 标准 RSS 2.0 + iTunes 扩展
-- ✅ **元数据管理** - 剧集标题、描述、封面、发布时间
-- ✅ **多用户隔离** - 每个用户独立的播客空间
-- ✅ **云存储** - 支持本地和 S3 对象存储
-- ✅ **Web 管理界面** - 现代化、响应式设计
-- ✅ **数据库驱动** - SQLite 持久化，数据不丢失
-
----
-
-## 🏗️ 技术栈
-
-- **后端**: Node.js + TypeScript + Fastify
-- **数据库**: SQLite + Drizzle ORM
-- **前端**: SolidJS + Tailwind CSS
-- **存储**: 本地文件系统 / S3 对象存储
-- **下载**: BBDown (B站) / yt-dlp (YouTube)
-
----
-
-## 🔒 重要说明
-
-- ✅ 所有文件操作必须通过 Web 界面完成
-- ❌ 不支持手动在服务器文件系统中添加/删除音频
-- ✅ 支持通过 Web 界面上传、删除、重命名文件
-- ✅ 所有元数据存储在数据库，RSS 动态生成
-
----
-
-## 🚧 开发计划
-
-- [ ] YouTube/抖音/西瓜视频下载支持（yt-dlp）
-- [ ] AI 音频转文字（Whisper）
-- [ ] AI 智能摘要生成
-- [ ] AI 自动生成封面图
-
----
-
-## 📄 许可证
-
-MIT License
+Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.

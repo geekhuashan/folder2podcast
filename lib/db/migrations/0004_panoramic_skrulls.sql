@@ -1,0 +1,1 @@
+CREATE INDEX `podcasts_user_dir_idx` ON `podcasts` (`user_id`,`dir_name`);
