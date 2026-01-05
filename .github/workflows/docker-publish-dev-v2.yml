@@ -1,6 +1,6 @@
-name: Docker Image CI/CD (V2 Dev)
+name: Docker Image CI/CD (V2 Dev - Next.js)
 
-# 专门用于 dev-v2 分支的开发版本构建
+# 专门用于 dev-v2 分支的开发版本构建（Next.js 全站架构）
 # V2 生产版本见 docker-publish-v2.yml
 
 on:
@@ -43,6 +43,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
+          file: ./Dockerfile
           push: true
           platforms: ${{ env.PLATFORMS }}
           tags: |
@@ -53,13 +54,17 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
             org.opencontainers.image.version=v2-dev
+            org.opencontainers.image.description=Folder2Podcast V2 - Next.js Full Stack Application
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            NODE_ENV=production
 
       - name: Update dev-v2 latest tag
         uses: docker/build-push-action@v5
         with:
           context: .
+          file: ./Dockerfile
           push: true
           platforms: ${{ env.PLATFORMS }}
           tags: ${{ env.IMAGE_NAME }}:dev-latest-v2
@@ -72,12 +77,15 @@ jobs:
           echo "  - ${{ env.IMAGE_NAME }}:dev-v2"
           echo "  - ${{ env.IMAGE_NAME }}:dev-v2-${{ steps.sha.outputs.short_sha }}"
           echo "  - ${{ env.IMAGE_NAME }}:dev-latest-v2"
+          echo ""
+          echo "🚀 Architecture: Next.js Full Stack"
+          echo "📝 Commit: ${{ github.sha }}"
 
       # 可选：发送通知（如果配置了 Bark）
       - name: Send Bark notification
         if: success()
         continue-on-error: true
         run: |
-          TITLE=$(echo -n "Docker镜像构建成功 (v2 dev)" | jq -sRr @uri)
-          BODY=$(echo -n "dev-v2分支已成功构建并推送到DockerHub" | jq -sRr @uri)
+          TITLE=$(echo -n "Docker镜像构建成功 (Next.js v2 dev)" | jq -sRr @uri)
+          BODY=$(echo -n "dev-v2分支已成功构建并推送到DockerHub (Next.js架构)" | jq -sRr @uri)
           curl --location "https://api.day.app/${{ secrets.BARK_KEY }}/${TITLE}/${BODY}?url=https://hub.docker.com/r/${{ env.IMAGE_NAME }}"

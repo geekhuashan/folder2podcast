@@ -1,6 +1,6 @@
-name: Docker Image CI/CD (V2 Stable)
+name: Docker Image CI/CD (V2 Stable - Next.js)
 
-# 专门用于 main-v2 分支的生产版本发布
+# 专门用于 main-v2 分支的生产版本发布（Next.js 全站架构）
 # V2 开发版本见 docker-publish-dev-v2.yml
 
 on:
@@ -54,14 +54,19 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
+          file: ./Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
           platforms: ${{ env.PLATFORMS }}
           tags: |
             ${{ env.IMAGE_NAME }}:main-v2
             ${{ env.IMAGE_NAME }}:latest-v2
-          labels: ${{ steps.meta.outputs.labels }}
+          labels: |
+            ${{ steps.meta.outputs.labels }}
+            org.opencontainers.image.description=Folder2Podcast V2 - Next.js Full Stack Application
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            NODE_ENV=production
 
       - name: Image digest
         run: |
@@ -69,12 +74,15 @@ jobs:
           echo "📦 Tags:"
           echo "  - ${{ env.IMAGE_NAME }}:main-v2"
           echo "  - ${{ env.IMAGE_NAME }}:latest-v2"
+          echo ""
+          echo "🚀 Architecture: Next.js Full Stack"
+          echo "📝 Commit: ${{ github.sha }}"
 
       # 可选：发送通知（如果配置了 Bark）
       - name: Send Bark notification
         if: success()
         continue-on-error: true
         run: |
-          TITLE=$(echo -n "Docker镜像构建成功 (v2 stable)" | jq -sRr @uri)
-          BODY=$(echo -n "main-v2分支已成功构建并推送到DockerHub" | jq -sRr @uri)
+          TITLE=$(echo -n "Docker镜像构建成功 (Next.js v2 stable)" | jq -sRr @uri)
+          BODY=$(echo -n "main-v2分支已成功构建并推送到DockerHub (Next.js架构)" | jq -sRr @uri)
           curl --location "https://api.day.app/${{ secrets.BARK_KEY }}/${TITLE}/${BODY}?url=https://hub.docker.com/r/${{ env.IMAGE_NAME }}"
