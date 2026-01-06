@@ -12,6 +12,7 @@ import { verifyPassword } from '@/lib/utils/password';
 import { success, error, jsonResponse, HTTP_STATUS } from '@/lib/utils/response';
 import { LoginRequest, LoginResponseData } from '@/lib/schemas/auth';
 import { SuccessResponse } from '@/lib/schemas/common';
+import { authConfig } from '@/lib/config';
 
 // 导出 schemas 供 OpenAPI 生成器使用
 export { LoginRequest, LoginResponseData };
@@ -39,7 +40,28 @@ export async function POST(request: NextRequest) {
 
     const { username, password } = parseResult.data;
 
-    // 查询用户
+    // 1. 优先检查是否是管理员账号
+    if (authConfig.hasAdminAccount && username === authConfig.admin.username) {
+      // 验证管理员密码
+      if (password === authConfig.admin.password) {
+        return jsonResponse(
+          success({
+            userId: authConfig.admin.username,
+            username: authConfig.admin.username,
+            accessKey: authConfig.admin.accessKey,
+          }),
+          HTTP_STATUS.OK
+        );
+      } else {
+        // 管理员密码错误
+        return jsonResponse(
+          error('用户名或密码错误', HTTP_STATUS.UNAUTHORIZED),
+          HTTP_STATUS.UNAUTHORIZED
+        );
+      }
+    }
+
+    // 2. 普通用户：查询数据库
     const user = await db.select().from(users)
       .where(eq(users.username, username)).get();
 

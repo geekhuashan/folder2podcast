@@ -30,3 +30,5 @@ logs/*.log.*
 .env.development.local
 logs/
 bin/*.data
+
+.next/*

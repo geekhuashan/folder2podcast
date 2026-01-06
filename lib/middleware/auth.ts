@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { users } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
+import { authConfig } from '@/lib/config';
 
 /**
  * Access Key 认证中间件
@@ -45,7 +46,8 @@ export interface AuthResult {
  * 说明：
  * - 从 Authorization 头中提取 Bearer token
  * - 验证 Access Key 格式（fp_ 开头）
- * - 从数据库查找匹配的用户
+ * - 优先检查是否是管理员 Access Key
+ * - 如果不是管理员，从数据库查找匹配的用户
  * - 返回用户信息或 null
  */
 export async function authenticateRequest(
@@ -79,7 +81,16 @@ export async function authenticateRequest(
     return null;
   }
 
-  // 5. 从数据库查找用户
+  // 5. 优先检查是否是管理员 Access Key
+  if (authConfig.hasAdminAccount && accessKey === authConfig.admin.accessKey) {
+    console.log(`[authenticateRequest] Authenticated as admin: ${authConfig.admin.username}`);
+    return {
+      userId: authConfig.admin.username,
+      username: authConfig.admin.username,
+    };
+  }
+
+  // 6. 从数据库查找普通用户
   try {
     const user = await db
       .select({

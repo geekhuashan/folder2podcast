@@ -9,10 +9,13 @@ import { serverConfig, storageConfig } from '@/lib/config';
 
 /**
  * 获取服务器基础 URL
- * 从环境变量读取，确保在生产环境中正确配置
+ * 从环境变量读取 BASE_URL 和 PORT，拼接成完整的 URL
  */
 function getBaseUrl(): string {
-  return serverConfig.baseUrl.replace(/\/$/, ''); // 移除末尾的斜杠
+  const baseUrl = serverConfig.baseUrl.replace(/\/$/, ''); // 移除末尾的斜杠
+  const port = serverConfig.port;
+
+  return `${baseUrl}:${port}`;
 }
 
 /**

@@ -13,6 +13,7 @@ import { generateSalt, hashPassword } from '@/lib/utils/password';
 import { success, fail, error, jsonResponse, HTTP_STATUS } from '@/lib/utils/response';
 import { v4 as uuidv4 } from 'uuid';
 import { RegisterRequest, RegisterResponseData } from '@/lib/schemas/auth';
+import { authConfig } from '@/lib/config';
 
 // 导出 schemas 供 OpenAPI 生成器使用
 export { RegisterRequest, RegisterResponseData };
@@ -26,6 +27,14 @@ export { RegisterRequest, RegisterResponseData };
  */
 export async function POST(request: NextRequest) {
   try {
+    // 检查是否允许注册
+    if (!authConfig.enableRegistration) {
+      return jsonResponse(
+        error('注册功能已关闭', HTTP_STATUS.FORBIDDEN),
+        HTTP_STATUS.FORBIDDEN
+      );
+    }
+
     // 解析请求体
     const body = await request.json();
 
