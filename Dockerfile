@@ -27,6 +27,7 @@ WORKDIR /app
 # 安装运行时依赖工具
 RUN apk add --no-cache \
     tini \
+    su-exec \
     curl && \
     rm -rf /var/cache/apk/*
 
@@ -39,8 +40,7 @@ ENV NODE_ENV=production \
 # 创建用户和目录
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs && \
-    mkdir -p /app/data /app/audio /app/podcasts && \
-    chown -R nextjs:nodejs /app
+    mkdir -p /app/data /app/audio /app/podcasts
 
 # 复制 package.json 和 package-lock.json 用于安装生产依赖
 COPY --from=builder /app/package.json /app/package-lock.json ./
@@ -60,8 +60,9 @@ COPY --from=builder --chown=nextjs:nodejs /app/drizzle.config.ts ./drizzle.confi
 # 全局安装 tsx 用于运行数据库迁移
 RUN npm install -g tsx
 
-# 切换到非 root 用户
-USER nextjs
+# 复制 entrypoint 脚本
+COPY --chown=root:root docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # 暴露端口
 EXPOSE 3100
@@ -70,8 +71,8 @@ EXPOSE 3100
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:3100/api/health || exit 1
 
-# 使用 tini 作为 init 系统
-ENTRYPOINT ["/sbin/tini", "--"]
+# 使用 entrypoint 脚本处理权限并切换用户
+ENTRYPOINT ["/sbin/tini", "--", "/usr/local/bin/docker-entrypoint.sh"]
 
 # 启动命令:先运行数据库迁移,再启动服务
 CMD ["sh", "-c", "tsx lib/db/migrate.ts && node server.js"]
