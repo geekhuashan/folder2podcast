@@ -42,8 +42,8 @@ RUN addgroup --system --gid 1001 nodejs && \
     mkdir -p /app/data /app/audio /app/podcasts && \
     chown -R nextjs:nodejs /app
 
-# 复制 package.json 用于安装生产依赖
-COPY --from=builder /app/package.json ./package.json
+# 复制 package.json 和 package-lock.json 用于安装生产依赖
+COPY --from=builder /app/package.json /app/package-lock.json ./
 
 # 只安装生产依赖
 RUN npm ci --omit=dev && npm cache clean --force
