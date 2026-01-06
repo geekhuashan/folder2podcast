@@ -1,32 +1,22 @@
 # ====================================
-# 依赖安装阶段
-# ====================================
-FROM node:20-alpine AS deps
-RUN apk add --no-cache libc6-compat
-WORKDIR /app
-
-# 复制依赖文件
-COPY package.json package-lock.json* ./
-RUN npm ci --only=production --ignore-scripts && \
-    npm cache clean --force
-
-# ====================================
 # 构建阶段
 # ====================================
 FROM node:20-alpine AS builder
 WORKDIR /app
 
-# 复制依赖
-COPY --from=deps /app/node_modules ./node_modules
+# 复制依赖文件
+COPY package.json package-lock.json* ./
+
+# 安装所有依赖(包括 devDependencies)
+RUN npm ci && npm cache clean --force
+
+# 复制源代码
 COPY . .
 
-# 设置生产环境并构建
+# 构建应用
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
-
-# 安装所有依赖(包括 devDependencies)用于构建
-RUN npm install && \
-    npm run build
+RUN npm run build
 
 # ====================================
 # 运行阶段
@@ -34,7 +24,7 @@ RUN npm install && \
 FROM node:20-alpine AS runner
 WORKDIR /app
 
-# 安装运行时依赖
+# 安装运行时依赖工具
 RUN apk add --no-cache \
     tini \
     curl && \
@@ -52,20 +42,22 @@ RUN addgroup --system --gid 1001 nodejs && \
     mkdir -p /app/data /app/audio /app/podcasts && \
     chown -R nextjs:nodejs /app
 
-# 从构建阶段复制文件
+# 复制 package.json 用于安装生产依赖
+COPY --from=builder /app/package.json ./package.json
+
+# 只安装生产依赖
+RUN npm ci --omit=dev && npm cache clean --force
+
+# 从构建阶段复制构建产物
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
 
 # 复制数据库相关文件
 COPY --from=builder --chown=nextjs:nodejs /app/lib ./lib
 COPY --from=builder --chown=nextjs:nodejs /app/drizzle.config.ts ./drizzle.config.ts
 
-# 从依赖阶段复制生产依赖
-COPY --from=deps --chown=nextjs:nodejs /app/node_modules ./node_modules
-
-# 安装 tsx (用于运行数据库迁移)
+# 全局安装 tsx 用于运行数据库迁移
 RUN npm install -g tsx
 
 # 切换到非 root 用户
