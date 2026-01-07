@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
       .where(eq(users.username, username)).get();
 
     // 统一错误消息（防止用户名枚举攻击）
-    if (!user || !user.passwordHash || !user.passwordSalt) {
+    if (!user || !user.password) {
       return jsonResponse(
         error('用户名或密码错误', HTTP_STATUS.UNAUTHORIZED),
         HTTP_STATUS.UNAUTHORIZED
@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 验证密码
-    const isValid = verifyPassword(password, user.passwordHash, user.passwordSalt);
+    const isValid = verifyPassword(password, user.password);
     if (!isValid) {
       return jsonResponse(
         error('用户名或密码错误', HTTP_STATUS.UNAUTHORIZED),

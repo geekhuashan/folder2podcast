@@ -9,7 +9,6 @@ import type { Podcast } from '@/lib/types';
 import { copyToClipboard } from '@/lib/utils/clipboard';
 import { showConfirm } from '@/lib/stores/dialog';
 import Card from '@mui/material/Card';
-import CardMedia from '@mui/material/CardMedia';
 import CardContent from '@mui/material/CardContent';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -48,83 +47,104 @@ export default function PodcastCard({
 
   return (
     <Card
-      sx={{ cursor: 'pointer' }}
+      sx={{
+        cursor: 'pointer',
+        transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+        '&:hover': {
+          transform: 'translateY(-4px)',
+          boxShadow: 4,
+        },
+      }}
       onClick={() => onSelect?.(podcast)}
     >
-      {/* 封面区域 */}
-      {podcast.imageUrl && (
-        <CardMedia
-          component="img"
-          image={podcast.imageUrl}
-          alt={podcast.title}
-          sx={{ height: 140, objectFit: 'cover' }}
-        />
-      )}
-
-      {/* 头部和内容 */}
-      <CardContent>
-        {/* 标题区域 */}
-        <Box sx={{ display: 'flex', gap: 1.5, mb: 1.5 }}>
-          {!podcast.imageUrl && (
-            <Box
-              sx={{
-                width: 56,
-                height: 56,
-                bgcolor: 'action.hover',
-                borderRadius: 1,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-              }}
-            >
-              <Mic sx={{ fontSize: 28, color: 'text.disabled' }} />
-            </Box>
-          )}
-          <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Box
-              component="h3"
-              sx={{
-                m: 0,
-                mb: 0.5,
-                fontSize: '0.875rem',
-                fontWeight: 600,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {podcast.title}
-            </Box>
-            <Box
-              component="p"
-              sx={{
-                m: 0,
-                mb: 0.5,
-                fontSize: '0.75rem',
-                color: 'text.secondary',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {podcast.author}
-            </Box>
-            <Box
-              component="p"
-              sx={{
-                m: 0,
-                fontSize: '0.6875rem',
-                color: 'text.disabled',
-                display: '-webkit-box',
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: 'vertical',
-                overflow: 'hidden',
-              }}
-            >
-              {podcast.description}
-            </Box>
+      {/* 正方形封面区域 */}
+      <Box
+        sx={{
+          position: 'relative',
+          width: '100%',
+          paddingTop: '100%', // 1:1 宽高比，实现正方形
+          bgcolor: 'action.hover',
+          overflow: 'hidden',
+        }}
+      >
+        {podcast.imageUrl ? (
+          <Box
+            component="img"
+            src={podcast.imageUrl}
+            alt={podcast.title}
+            sx={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+            }}
+          />
+        ) : (
+          <Box
+            sx={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Mic sx={{ fontSize: 64, color: 'text.disabled' }} />
           </Box>
+        )}
+      </Box>
+
+      {/* 内容区域 */}
+      <CardContent sx={{ pb: 2 }}>
+        {/* 标题 */}
+        <Box
+          component="h3"
+          sx={{
+            m: 0,
+            mb: 0.5,
+            fontSize: '1rem',
+            fontWeight: 600,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {podcast.title}
+        </Box>
+
+        {/* 作者 */}
+        <Box
+          sx={{
+            mb: 1,
+            fontSize: '0.75rem',
+            color: 'text.secondary',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {podcast.author}
+        </Box>
+
+        {/* 描述 */}
+        <Box
+          sx={{
+            mb: 1.5,
+            fontSize: '0.6875rem',
+            color: 'text.disabled',
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical',
+            overflow: 'hidden',
+            lineHeight: 1.4,
+          }}
+        >
+          {podcast.description}
         </Box>
 
         {/* RSS Feed 复制区 */}
@@ -137,6 +157,7 @@ export default function PodcastCard({
             border: 1,
             borderColor: 'divider',
           }}
+          onClick={(e) => e.stopPropagation()}
         >
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <TextField
@@ -155,7 +176,6 @@ export default function PodcastCard({
               }}
               sx={{ flex: 1 }}
               onClick={(e) => {
-                e.stopPropagation();
                 const input = e.currentTarget.querySelector('input');
                 input?.select();
               }}
@@ -165,11 +185,10 @@ export default function PodcastCard({
               variant={copied ? 'contained' : 'outlined'}
               startIcon={copied ? <Check /> : <ContentCopy />}
               onClick={(e) => {
-                e.stopPropagation();
                 handleCopy();
               }}
             >
-              {copied ? '已复制' : '复制RSS'}
+              {copied ? '✓' : 'RSS'}
             </Button>
           </Box>
         </Box>
@@ -184,7 +203,6 @@ export default function PodcastCard({
             size="small"
             startIcon={<Upload />}
             onClick={(e) => {
-              e.stopPropagation();
               onUpload?.(podcast);
             }}
           >
@@ -195,7 +213,6 @@ export default function PodcastCard({
             size="small"
             startIcon={<Edit />}
             onClick={(e) => {
-              e.stopPropagation();
               onEdit?.(podcast);
             }}
           >
@@ -207,7 +224,6 @@ export default function PodcastCard({
             color="error"
             startIcon={<Delete />}
             onClick={async (e) => {
-              e.stopPropagation();
               const confirmed = await showConfirm('确定要删除这个播客吗？');
               if (confirmed) {
                 onDelete?.(podcast);

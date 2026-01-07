@@ -96,15 +96,10 @@ async function createDefaultAdmin() {
   const { db } = await import('../lib/db');
   const { users } = await import('../lib/db/schema');
   const { generateAccessKey } = await import('../lib/middleware/auth');
-  const { generateSalt, hashPassword } = await import('../lib/utils/password');
 
   try {
     const username = 'admin';
     const password = 'admin';
-
-    // 生成密码哈希
-    const salt = generateSalt();
-    const passwordHashValue = hashPassword(password, salt);
 
     // 生成 Access Key
     const accessKey = generateAccessKey();
@@ -116,8 +111,7 @@ async function createDefaultAdmin() {
         id: username,
         username,
         accessKey,
-        passwordHash: passwordHashValue,
-        passwordSalt: salt,
+        password: password,  // 明文存储密码
       })
       .returning()
       .get();

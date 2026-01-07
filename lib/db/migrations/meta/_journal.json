@@ -36,6 +36,13 @@
       "when": 1767599797095,
       "tag": "0004_panoramic_skrulls",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1736232000000,
+      "tag": "0005_add_password_column",
+      "breakpoints": true
     }
   ]
 }

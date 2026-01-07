@@ -53,14 +53,15 @@ export function getAudioUrl(
  * @example
  * ```ts
  * getPodcastCoverUrl('user123', 'my-podcast')
- * // => 'http://localhost:3000/api/audio/user123/my-podcast/cover.jpg'
+ * // => 'http://localhost:3000/api/audio/user123/my-podcast/cover'
  * ```
  */
 export function getPodcastCoverUrl(
   userId: string,
   podcastDir: string
 ): string {
-  return `${getBaseUrl()}/api/audio/${userId}/${podcastDir}/${encodeURIComponent(storageConfig.podcastCoverName)}`;
+  // 访问 /cover 端点，会自动尝试 jpg/png/webp
+  return `${getBaseUrl()}/api/audio/${userId}/${podcastDir}/cover`;
 }
 
 /**

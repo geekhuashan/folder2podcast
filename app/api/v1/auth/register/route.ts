@@ -9,7 +9,6 @@ import { db } from '@/lib/db';
 import { users } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { generateAccessKey } from '@/lib/middleware/auth';
-import { generateSalt, hashPassword } from '@/lib/utils/password';
 import { success, fail, error, jsonResponse, HTTP_STATUS } from '@/lib/utils/response';
 import { v4 as uuidv4 } from 'uuid';
 import { RegisterRequest, RegisterResponseData } from '@/lib/schemas/auth';
@@ -63,9 +62,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 生成密码哈希
-    const salt = generateSalt();
-    const hash = hashPassword(password, salt);
+    // 生成 Access Key
     const accessKey = generateAccessKey();
 
     // 创建用户（直接使用 username 作为 userId）
@@ -75,8 +72,7 @@ export async function POST(request: NextRequest) {
       id: userId,
       username,
       accessKey,
-      passwordHash: hash,
-      passwordSalt: salt,
+      password: password,  // 明文存储密码
     });
 
     return jsonResponse(

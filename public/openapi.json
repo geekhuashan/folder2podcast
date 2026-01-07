@@ -888,6 +888,25 @@
         }
       }
     },
+    "/audio/{userId}/{podcastDir}/cover": {
+      "get": {
+        "operationId": "get-audio-{userId}-{podcastDir}-cover",
+        "summary": "GET /api/audio/[userId]/[podcastDir]/cover",
+        "description": "",
+        "tags": [
+          "Audio"
+        ],
+        "parameters": [],
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
     "/v1/podcasts": {
       "get": {
         "operationId": "get-v1-podcasts",

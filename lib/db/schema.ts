@@ -17,10 +17,8 @@ export const users = sqliteTable('users', {
   username: text('username').notNull().unique(),
   // Access Key（类似 API Key，用于 HTTP API 认证）
   accessKey: text('access_key').notNull().unique(),
-  // 密码哈希（可选，用于账号密码登录）
-  passwordHash: text('password_hash'),
-  // 密码盐值（可选，用于密码验证）
-  passwordSalt: text('password_salt'),
+  // 密码（可选，明文存储）
+  password: text('password'),
   // 创建时间
   createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(unixepoch())`),
 }, (table) => ({

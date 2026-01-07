@@ -9,6 +9,7 @@ import { generateAccessKey } from '@/lib/middleware/auth';
 
 async function createTestUser() {
   const username = process.argv[2] || 'testuser';
+  const password = process.argv[3]; // 可选：如果不提供密码，用户只能通过 Access Key 访问
 
   try {
     // 生成 Access Key
@@ -21,6 +22,7 @@ async function createTestUser() {
         id: username,
         username,
         accessKey,
+        ...(password ? { password } : {}), // 如果提供了密码，则设置密码
       })
       .returning()
       .get();
@@ -30,6 +32,9 @@ async function createTestUser() {
     console.log('用户信息：');
     console.log(`  用户名: ${user.username}`);
     console.log(`  用户ID: ${user.id}`);
+    if (password) {
+      console.log(`  密码: ${password}`);
+    }
     console.log('');
     console.log('Access Key（请妥善保管）：');
     console.log(`  ${user.accessKey}`);

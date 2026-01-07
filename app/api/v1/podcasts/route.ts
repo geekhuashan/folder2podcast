@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { authenticateRequest } from '@/lib/middleware/auth';
 import { success, fail, error, jsonResponse, HTTP_STATUS } from '@/lib/utils/response';
 import { createApiLogger } from '@/lib/middleware/logger';
-import { getRssFeedUrl } from '@/lib/utils/url';
+import { getRssFeedUrl, getPodcastCoverUrl } from '@/lib/utils/url';
 import { getUserById } from '@/lib/db/queries';
 import { mkdir } from 'fs/promises';
 import { getLocalPath } from '@/lib/utils/url';
@@ -52,10 +52,11 @@ export async function GET(request: NextRequest) {
       return jsonResponse(error('User not found', HTTP_STATUS.NOT_FOUND), HTTP_STATUS.NOT_FOUND);
     }
 
-    // 4. 为每个播客添加 RSS Feed URL 和 username
+    // 4. 为每个播客添加 RSS Feed URL、username 和 imageUrl
     const podcastsWithUrl = podcastsList.map(podcast => ({
       ...podcast,
       username: user.username,
+      imageUrl: getPodcastCoverUrl(podcast.userId, podcast.dirName),
       feedUrl: getRssFeedUrl(user.username, podcast.dirName),
     }));
 
@@ -168,6 +169,7 @@ export async function POST(request: NextRequest) {
       success({
         ...newPodcast,
         username: user.username,
+        imageUrl: getPodcastCoverUrl(newPodcast.userId, newPodcast.dirName),
         feedUrl: getRssFeedUrl(user.username, newPodcast.dirName),
       }),
       HTTP_STATUS.CREATED

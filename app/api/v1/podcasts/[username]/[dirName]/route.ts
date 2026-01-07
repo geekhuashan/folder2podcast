@@ -4,7 +4,7 @@ import { podcasts, episodes as episodesTable } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { authenticateRequest } from '@/lib/middleware/auth';
 import { success, fail, error, jsonResponse, HTTP_STATUS } from '@/lib/utils/response';
-import { getRssFeedUrl } from '@/lib/utils/url';
+import { getRssFeedUrl, getPodcastCoverUrl } from '@/lib/utils/url';
 import { clearFeedCache } from '@/lib/services/feed-data.service';
 import { rm, rename } from 'fs/promises';
 import { getLocalPath } from '@/lib/utils/url';
@@ -79,6 +79,8 @@ export async function GET(
     return jsonResponse(
       success({
         ...podcast,
+        username: username,
+        imageUrl: getPodcastCoverUrl(podcast.userId, podcast.dirName),
         feedUrl: getRssFeedUrl(username, podcast.dirName),
         episodeCount: episodeCount.length,
       }),
@@ -232,6 +234,8 @@ export async function PUT(
     return jsonResponse(
       success({
         ...updated,
+        username: username,
+        imageUrl: getPodcastCoverUrl(updated.userId, updated.dirName),
         feedUrl: getRssFeedUrl(username, updated.dirName),
       }),
       HTTP_STATUS.OK

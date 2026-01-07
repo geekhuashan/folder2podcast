@@ -268,13 +268,14 @@ export default function PodcastDetailPage() {
       >
         <Container maxWidth="xl" sx={{ py: 1.5 }}>
           {/* 第一行：返回 + 封面 + 标题信息 + 操作按钮 */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5, flexWrap: { xs: 'wrap', sm: 'nowrap' } }}>
             {/* 返回按钮 */}
             <Button
               size="small"
               variant="text"
               startIcon={<ArrowBack />}
               onClick={() => router.push('/')}
+              sx={{ minWidth: 'auto' }}
             >
               返回
             </Button>
@@ -282,8 +283,8 @@ export default function PodcastDetailPage() {
             {/* 封面 */}
             <Box
               sx={{
-                width: 64,
-                height: 64,
+                width: 56,
+                height: 56,
                 borderRadius: 1,
                 flexShrink: 0,
                 display: 'flex',
@@ -302,17 +303,17 @@ export default function PodcastDetailPage() {
                   sx={{ width: '100%', height: '100%', objectFit: 'cover' }}
                 />
               ) : (
-                <Mic sx={{ fontSize: 32, color: 'text.disabled' }} />
+                <Mic sx={{ fontSize: 28, color: 'text.disabled' }} />
               )}
             </Box>
 
             {/* 标题和作者 */}
-            <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Box sx={{ flex: 1, minWidth: 0, maxWidth: { xs: '100%', sm: '300px' } }}>
               <Box
                 component="h1"
                 sx={{
                   m: 0,
-                  fontSize: '1.125rem',
+                  fontSize: { xs: '1rem', sm: '1.125rem' },
                   fontWeight: 700,
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
@@ -336,12 +337,13 @@ export default function PodcastDetailPage() {
             </Box>
 
             {/* 操作按钮 */}
-            <Box sx={{ display: 'flex', gap: 1, flexShrink: 0 }}>
+            <Box sx={{ display: 'flex', gap: 0.75, flexShrink: 0, flexWrap: { xs: 'wrap', sm: 'nowrap' } }}>
               <Button
                 size="small"
                 variant="contained"
                 startIcon={<Upload />}
                 onClick={() => setShowUploadDialog(true)}
+                sx={{ minWidth: { xs: 64, sm: 80 } }}
               >
                 上传
               </Button>
@@ -350,8 +352,19 @@ export default function PodcastDetailPage() {
                 variant="outlined"
                 startIcon={<Edit />}
                 onClick={() => setShowEditDialog(true)}
+                sx={{ minWidth: { xs: 64, sm: 80 } }}
               >
                 编辑
+              </Button>
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<ContentCopy />}
+                onClick={handleCopy}
+                color={copied ? 'success' : 'primary'}
+                sx={{ minWidth: { xs: 64, sm: 80 } }}
+              >
+                {copied ? '✓' : 'RSS'}
               </Button>
               <Button
                 size="small"
@@ -359,35 +372,28 @@ export default function PodcastDetailPage() {
                 startIcon={<Delete />}
                 onClick={handleDelete}
                 color="error"
+                sx={{ minWidth: { xs: 64, sm: 80 } }}
               >
                 删除
-              </Button>
-              <Button
-                size="small"
-                variant={copied ? 'contained' : 'outlined'}
-                startIcon={copied ? <Check /> : <ContentCopy />}
-                onClick={handleCopy}
-                color={copied ? 'success' : 'primary'}
-              >
-                {copied ? '已复制' : 'RSS'}
               </Button>
             </Box>
           </Box>
 
           {/* 第二行：继承设置 + 数据统计 + 排序工具 */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, fontSize: '0.6875rem', flexWrap: 'wrap' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, fontSize: '0.6875rem', flexWrap: 'wrap' }}>
             {/* 继承开关 */}
             <Box
               sx={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 1,
-                p: '4px 10px',
+                gap: 0.75,
+                px: 1,
+                py: 0.5,
                 borderRadius: 0.5,
                 bgcolor: 'action.hover',
               }}
             >
-              <Box component="span" sx={{ fontWeight: 600, color: 'text.secondary' }}>剧集设置:</Box>
+              <Box component="span" sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.6875rem' }}>剧集设置:</Box>
               <FormControlLabel
                 control={
                   <Switch
@@ -415,12 +421,14 @@ export default function PodcastDetailPage() {
                   label={`封面 ${stats.cover}/${stats.total}`}
                   size="small"
                   color={stats.cover === stats.total ? 'success' : 'default'}
+                  sx={{ height: 24, fontSize: '0.6875rem' }}
                 />
                 <Chip
                   icon={<Description />}
                   label={`描述 ${stats.description}/${stats.total}`}
                   size="small"
                   color={stats.description === stats.total ? 'success' : 'default'}
+                  sx={{ height: 24, fontSize: '0.6875rem' }}
                 />
               </>
             )}
@@ -428,14 +436,15 @@ export default function PodcastDetailPage() {
             {/* 排序工具 */}
             {episodes && episodes.length > 0 && (
               <>
-                <Box component="span" sx={{ fontWeight: 600, color: 'text.secondary' }}>排序:</Box>
+                <Box component="span" sx={{ fontWeight: 600, color: 'text.secondary', ml: 0.5 }}>排序:</Box>
                 <Select
                   value={sortStrategy}
                   onChange={(e) => setSortStrategy(e.target.value as SortStrategy)}
                   disabled={isReordering}
                   size="small"
                   sx={{
-                    minWidth: 120,
+                    minWidth: 100,
+                    height: 28,
                     '& .MuiSelect-select': {
                       py: 0.5,
                       fontSize: '0.6875rem',
@@ -453,6 +462,7 @@ export default function PodcastDetailPage() {
                   variant="contained"
                   onClick={handleReorderPreview}
                   disabled={isReordering}
+                  sx={{ height: 28, minWidth: 60, fontSize: '0.6875rem' }}
                 >
                   {isReordering ? '处理中...' : '应用'}
                 </Button>
@@ -463,10 +473,10 @@ export default function PodcastDetailPage() {
       </Box>
 
       {/* 主内容 */}
-      <Container component="main" maxWidth="xl" sx={{ py: 2 }}>
+      <Container component="main" maxWidth="xl" sx={{ py: { xs: 1.5, sm: 2 } }}>
         {/* 剧集列表标题 */}
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
-          <Box component="h2" sx={{ m: 0, fontSize: '1.125rem', fontWeight: 600 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1, mt: 1 }}>
+          <Box component="h2" sx={{ m: 0, fontSize: { xs: '1rem', sm: '1.125rem' }, fontWeight: 600 }}>
             剧集 {episodes && <Box component="span" sx={{ color: 'text.secondary' }}>({episodes.length})</Box>}
           </Box>
         </Box>
