@@ -5,6 +5,7 @@ import { eq } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { authenticateRequest } from '@/lib/middleware/auth';
 import { success, fail, error, jsonResponse, HTTP_STATUS } from '@/lib/utils/response';
+import { createApiLogger } from '@/lib/middleware/logger';
 import { getRssFeedUrl } from '@/lib/utils/url';
 import { getUserById } from '@/lib/db/queries';
 import { mkdir } from 'fs/promises';
@@ -27,9 +28,12 @@ export { PodcastListResponse };
  * @openapi
  */
 export async function GET(request: NextRequest) {
+  const logger = createApiLogger(request);
+
   // 1. 验证 Access Key
   const auth = await authenticateRequest(request);
   if (!auth) {
+    logger.logWarning(HTTP_STATUS.UNAUTHORIZED, 'Invalid or missing access key');
     return jsonResponse(error('Unauthorized', HTTP_STATUS.UNAUTHORIZED), HTTP_STATUS.UNAUTHORIZED);
   }
 
@@ -44,6 +48,7 @@ export async function GET(request: NextRequest) {
     // 3. 获取用户名
     const user = await getUserById(auth.userId);
     if (!user) {
+      logger.logWarning(HTTP_STATUS.NOT_FOUND, 'User not found');
       return jsonResponse(error('User not found', HTTP_STATUS.NOT_FOUND), HTTP_STATUS.NOT_FOUND);
     }
 
@@ -55,9 +60,10 @@ export async function GET(request: NextRequest) {
     }));
 
     // 5. 返回成功响应
+    logger.logSuccess(HTTP_STATUS.OK, `Found ${podcastsWithUrl.length} podcasts`);
     return jsonResponse(success(podcastsWithUrl), HTTP_STATUS.OK);
   } catch (err) {
-    console.error('[GET /api/v1/podcasts] Error:', err);
+    logger.logError(HTTP_STATUS.INTERNAL_SERVER_ERROR, 'Failed to fetch podcasts', err);
     return jsonResponse(
       error('Failed to fetch podcasts', HTTP_STATUS.INTERNAL_SERVER_ERROR),
       HTTP_STATUS.INTERNAL_SERVER_ERROR
@@ -74,9 +80,12 @@ export async function GET(request: NextRequest) {
  * @openapi
  */
 export async function POST(request: NextRequest) {
+  const logger = createApiLogger(request);
+
   // 1. 验证 Access Key
   const auth = await authenticateRequest(request);
   if (!auth) {
+    logger.logWarning(HTTP_STATUS.UNAUTHORIZED, 'Invalid or missing access key');
     return jsonResponse(error('Unauthorized', HTTP_STATUS.UNAUTHORIZED), HTTP_STATUS.UNAUTHORIZED);
   }
 
@@ -88,6 +97,7 @@ export async function POST(request: NextRequest) {
     const parseResult = CreatePodcastRequest.safeParse(body);
     if (!parseResult.success) {
       const errors = parseResult.error.flatten().fieldErrors;
+      logger.logWarning(HTTP_STATUS.BAD_REQUEST, 'Validation failed', errors);
       return jsonResponse(
         fail({
           dirName: errors.dirName?.[0],
@@ -112,6 +122,7 @@ export async function POST(request: NextRequest) {
       .get();
 
     if (existing) {
+      logger.logWarning(HTTP_STATUS.CONFLICT, `Directory name already exists: ${validatedData.dirName}`);
       return jsonResponse(
         fail({
           dirName: 'Directory name already exists',
@@ -125,7 +136,7 @@ export async function POST(request: NextRequest) {
     try {
       await mkdir(podcastDir, { recursive: true });
     } catch (err) {
-      console.error('[POST /api/v1/podcasts] Failed to create directory:', err);
+      logger.logError(HTTP_STATUS.INTERNAL_SERVER_ERROR, 'Failed to create directory', err);
       return jsonResponse(
         error('Failed to create podcast directory', HTTP_STATUS.INTERNAL_SERVER_ERROR),
         HTTP_STATUS.INTERNAL_SERVER_ERROR
@@ -147,10 +158,12 @@ export async function POST(request: NextRequest) {
     // 7. 获取用户名以生成 Feed URL
     const user = await getUserById(auth.userId);
     if (!user) {
+      logger.logWarning(HTTP_STATUS.NOT_FOUND, 'User not found');
       return jsonResponse(error('User not found', HTTP_STATUS.NOT_FOUND), HTTP_STATUS.NOT_FOUND);
     }
 
     // 8. 返回成功响应
+    logger.logSuccess(HTTP_STATUS.CREATED, `Podcast created: ${newPodcast.dirName} (${newPodcast.id})`);
     return jsonResponse(
       success({
         ...newPodcast,
@@ -160,7 +173,7 @@ export async function POST(request: NextRequest) {
       HTTP_STATUS.CREATED
     );
   } catch (err) {
-    console.error('[POST /api/v1/podcasts] Error:', err);
+    logger.logError(HTTP_STATUS.INTERNAL_SERVER_ERROR, 'Failed to create podcast', err);
     return jsonResponse(
       error('Failed to create podcast', HTTP_STATUS.INTERNAL_SERVER_ERROR),
       HTTP_STATUS.INTERNAL_SERVER_ERROR

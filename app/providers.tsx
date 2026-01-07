@@ -2,6 +2,7 @@
 
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
+import { AppRouterCacheProvider } from '@mui/material-nextjs/v15-appRouter';
 import GlobalDialog from '@/components/GlobalDialog';
 
 const theme = createTheme({
@@ -21,11 +22,13 @@ const theme = createTheme({
 
 export function MuiProvider({ children }: { children: React.ReactNode }) {
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      {children}
-      <GlobalDialog />
-    </ThemeProvider>
+    <AppRouterCacheProvider>
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        {children}
+        <GlobalDialog />
+      </ThemeProvider>
+    </AppRouterCacheProvider>
   );
 }
 

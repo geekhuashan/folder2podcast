@@ -264,7 +264,7 @@ export default function AboutPage() {
 
         <Grid container spacing={3}>
           {features.map((feature, index) => (
-            <Grid item xs={12} sm={6} md={3} key={index}>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }} key={index}>
               <Card
                 onMouseEnter={() => setHoveredFeature(index)}
                 onMouseLeave={() => setHoveredFeature(null)}
@@ -343,7 +343,7 @@ export default function AboutPage() {
       <Box sx={{ bgcolor: 'white', py: { xs: 4, md: 6 } }}>
         <Container maxWidth="xl">
           <Grid container spacing={6} alignItems="center">
-            <Grid item xs={12} md={6}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <Typography
                 variant="h3"
                 sx={{
@@ -390,7 +390,7 @@ export default function AboutPage() {
                 ))}
               </Box>
             </Grid>
-            <Grid item xs={12} md={6}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <Box
                 sx={{
                   position: 'relative',
@@ -562,7 +562,7 @@ export default function AboutPage() {
         </Box>
         <Grid container spacing={4}>
           {techFeatures.map((feature, index) => (
-            <Grid item xs={12} sm={4} key={index}>
+            <Grid size={{ xs: 12, sm: 4 }} key={index}>
               <Box sx={{ textAlign: 'center' }}>
                 <Box
                   sx={{
@@ -610,7 +610,7 @@ export default function AboutPage() {
           </Box>
           <Grid container spacing={3}>
             {useCases.map((useCase, index) => (
-              <Grid item xs={12} sm={6} md={3} key={index}>
+              <Grid size={{ xs: 12, sm: 6, md: 3 }} key={index}>
                 <Card
                   sx={{
                     textAlign: 'center',

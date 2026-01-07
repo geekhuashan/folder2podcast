@@ -16,12 +16,14 @@
     "docs:generate": "next-openapi-gen generate"
   },
   "dependencies": {
+    "@emotion/cache": "^11.14.0",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
     "@hookform/resolvers": "^5.2.2",
     "@libsql/client": "^0.15.15",
     "@mui/icons-material": "^7.3.6",
     "@mui/material": "^7.3.6",
+    "@mui/material-nextjs": "^7.3.6",
     "@scalar/api-reference-react": "^0.8.15",
     "ajv": "^8.17.1",
     "drizzle-orm": "^0.45.1",

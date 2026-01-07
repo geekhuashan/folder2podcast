@@ -95,7 +95,6 @@ async function createDefaultAdmin() {
   // 动态导入，确保在迁移完成后才建立数据库连接
   const { db } = await import('../lib/db');
   const { users } = await import('../lib/db/schema');
-  const { v4: uuidv4 } = await import('uuid');
   const { generateAccessKey } = await import('../lib/middleware/auth');
   const { generateSalt, hashPassword } = await import('../lib/utils/password');
 
@@ -110,11 +109,11 @@ async function createDefaultAdmin() {
     // 生成 Access Key
     const accessKey = generateAccessKey();
 
-    // 创建用户
+    // 创建用户（使用 username 作为 id）
     const user = await db
       .insert(users)
       .values({
-        id: uuidv4(),
+        id: username,
         username,
         accessKey,
         passwordHash: passwordHashValue,

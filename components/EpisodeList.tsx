@@ -10,6 +10,7 @@ import EpisodeEditorModal from './EpisodeEditorModal';
 import { showAlert } from '@/lib/stores/dialog';
 import Box from '@mui/material/Box';
 import IconButton from '@mui/material/IconButton';
+import Tooltip from '@mui/material/Tooltip';
 import MusicNote from '@mui/icons-material/MusicNote';
 import Folder from '@mui/icons-material/Folder';
 import Edit from '@mui/icons-material/Edit';
@@ -56,8 +57,8 @@ export default function EpisodeList({ episodes, podcast, onEpisodeChanged }: Epi
     // 如果启用了继承，提示用户先取消继承
     if (podcast.inheritanceEnabled) {
       await showAlert(
-        '当前播客已启用继承设置。\n\n请先在顶部取消"已启用继承"开关，才能编辑单集的封面、描述等信息。',
-        '提示'
+        '当前剧集数据继承了播客的配置，无法单独编辑。\n\n如需为每一集单独设置封面、作者、描述等信息，请先在页面顶部关闭"统一使用播客设置"开关。',
+        '无法编辑'
       );
       return;
     }
@@ -230,17 +231,30 @@ export default function EpisodeList({ episodes, podcast, onEpisodeChanged }: Epi
           </Box>
 
           {/* 编辑按钮 */}
-          <IconButton
-            size="small"
-            onClick={() => handleEditClick(episode)}
-            disabled={podcast.inheritanceEnabled}
-            title={podcast.inheritanceEnabled ? '请先取消继承设置' : '编辑'}
-            sx={{
-              opacity: podcast.inheritanceEnabled ? 0.5 : 1,
-            }}
+          <Tooltip
+            title={
+              podcast.inheritanceEnabled
+                ? '当前剧集继承了播客配置，点击查看详情'
+                : '编辑剧集信息'
+            }
+            arrow
           >
-            <Edit sx={{ fontSize: 18 }} />
-          </IconButton>
+            <span>
+              <IconButton
+                size="small"
+                onClick={() => handleEditClick(episode)}
+                sx={{
+                  opacity: podcast.inheritanceEnabled ? 0.4 : 1,
+                  cursor: podcast.inheritanceEnabled ? 'not-allowed' : 'pointer',
+                  '&:hover': {
+                    opacity: podcast.inheritanceEnabled ? 0.6 : 1,
+                  },
+                }}
+              >
+                <Edit sx={{ fontSize: 18 }} />
+              </IconButton>
+            </span>
+          </Tooltip>
         </Box>
       ))}
 

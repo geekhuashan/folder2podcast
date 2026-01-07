@@ -1,6 +1,5 @@
 import { db } from './index';
 import { users } from './schema';
-import { v4 as uuidv4 } from 'uuid';
 import { generateAccessKey } from '@/lib/middleware/auth';
 
 /**
