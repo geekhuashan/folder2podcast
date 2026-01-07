@@ -7,6 +7,7 @@ import {
   getPodcastCoverUrl,
   getEpisodeCoverUrl,
   getRssFeedUrl,
+  getPodcastDetailUrl,
 } from '@/lib/utils/url';
 import { getUserById } from '@/lib/db/queries';
 
@@ -30,6 +31,8 @@ export interface FeedPodcast extends Podcast {
   feedUrl: string;
   // 播客封面 URL
   imageUrl: string;
+  // 播客管理页面 URL
+  podcastDetailUrl: string;
   // 剧集是否继承播客设置
   inheritanceEnabled: boolean;
 }
@@ -135,6 +138,7 @@ export async function generatePodcastFeedData(
     updatedAt: podcast.updatedAt,
     feedUrl: getRssFeedUrl(user.username, podcast.dirName),
     imageUrl: getPodcastCoverUrl(podcast.userId, podcast.dirName),
+    podcastDetailUrl: getPodcastDetailUrl(user.username, podcast.dirName),
   };
 
   const feedEpisodes: FeedEpisode[] = episodeRecords.map(ep => {
