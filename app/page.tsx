@@ -10,12 +10,13 @@ import { useAppStore } from '@/lib/store/app';
 import { podcastsAPI, uploadAPI, accessKeyManager } from '@/lib/api/client';
 import { chineseToPinyin } from '@/lib/utils/pinyin';
 import { showAlert, showConfirm } from '@/lib/stores/dialog';
+import { flattenPath } from '@/lib/utils/file-path';
 import AccessKeyInput from '@/components/AccessKeyInput';
 import PodcastCard from '@/components/PodcastCard';
 import PodcastForm from '@/components/PodcastForm';
 import FileUpload from '@/components/FileUpload';
 import UploadProgressModal from '@/components/UploadProgressModal';
-import type { Podcast } from '@/lib/types';
+import type { Podcast, FileWithPath } from '@/lib/types';
 import Box from '@mui/material/Box';
 import Container from '@mui/material/Container';
 import Button from '@mui/material/Button';
@@ -90,7 +91,7 @@ export default function HomePage() {
 
   // 处理文件上传的核心逻辑（供文件夹选择和拖拽共用）
   const processFilesUpload = async (items: DataTransferItemList | FileList) => {
-    let files: File[] = [];
+    let filesWithPath: FileWithPath[] = [];
     let folderName = '';
 
     // 处理拖拽的文件
@@ -109,7 +110,7 @@ export default function HomePage() {
       // 读取文件夹内容
       if (entries.length > 0 && entries[0].isDirectory) {
         folderName = entries[0].name;
-        files = await readDirectory(entries[0]);
+        filesWithPath = await readDirectory(entries[0]);
       }
     } else {
       // 处理文件输入选择的文件
@@ -118,7 +119,22 @@ export default function HomePage() {
         const firstFile = fileList[0] as File & { webkitRelativePath?: string };
         const pathParts = firstFile.webkitRelativePath?.split('/') || [];
         folderName = pathParts[0] || '未命名文件夹';
-        files = fileList;
+
+        // 从 FileList 构造 FileWithPath
+        filesWithPath = fileList.map(file => {
+          const f = file as File & { webkitRelativePath?: string };
+          const relativePath = f.webkitRelativePath || file.name;
+
+          // 移除根文件夹名（已用作播客名）
+          const relativePathWithoutRoot = relativePath.split('/').slice(1).join('/') || file.name;
+
+          return {
+            file,
+            relativePath: relativePathWithoutRoot,
+            displayName: file.name,
+            flattenedName: flattenPath(relativePathWithoutRoot),
+          };
+        });
       }
     }
 
@@ -128,14 +144,32 @@ export default function HomePage() {
     }
 
     const audioExtensions = ['.mp3', '.m4a', '.wav', '.aac', '.ogg', '.flac', '.wma'];
-    const audioFiles = files.filter((file) => {
-      const ext = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
+    const audioFiles = filesWithPath.filter((fwp) => {
+      const ext = fwp.file.name.toLowerCase().substring(fwp.file.name.lastIndexOf('.'));
       return audioExtensions.includes(ext);
     });
 
     if (audioFiles.length === 0) {
       await showAlert('所选文件夹中没有音频文件', '错误');
       return;
+    }
+
+    // 检测嵌套文件并提示用户
+    const nestedFiles = audioFiles.filter(fwp => fwp.relativePath.includes('/'));
+    if (nestedFiles.length > 0) {
+      const preview = nestedFiles.slice(0, 3).map(fwp =>
+        `  ${fwp.relativePath} → ${fwp.flattenedName}`
+      ).join('\n');
+
+      const moreCount = nestedFiles.length > 3 ? `\n  ... 还有 ${nestedFiles.length - 3} 个文件` : '';
+
+      const confirmed = await showConfirm(
+        `检测到 ${nestedFiles.length} 个嵌套文件，将添加路径前缀：\n\n${preview}${moreCount}\n\n是否继续上传？`
+      );
+
+      if (!confirmed) {
+        return;
+      }
     }
 
     try {
@@ -171,22 +205,27 @@ export default function HomePage() {
 
       let successCount = 0;
       for (let i = 0; i < audioFiles.length; i++) {
-        const file = audioFiles[i];
+        const fileWithPath = audioFiles[i];
 
-        // 更新进度
+        // 更新进度（显示原始文件名）
         setFolderUploadState(prev => ({
           ...prev,
-          currentFile: file.name,
+          currentFile: fileWithPath.displayName,
           progress: i,
         }));
 
         try {
-          const uploadResponse = await uploadAPI.uploadAudio(file, podcastId);
+          // 上传时传递扁平化的目标文件名
+          const uploadResponse = await uploadAPI.uploadAudio(
+            fileWithPath.file,
+            podcastId,
+            fileWithPath.flattenedName
+          );
           if (uploadResponse.status === 'success') {
             successCount++;
           }
         } catch (error) {
-          console.error(`文件 ${file.name} 上传失败:`, error);
+          console.error(`文件 ${fileWithPath.displayName} 上传失败:`, error);
         }
       }
 
@@ -206,9 +245,9 @@ export default function HomePage() {
     }
   };
 
-  // 读取文件夹内容（递归）
-  const readDirectory = async (dirEntry: any): Promise<File[]> => {
-    const files: File[] = [];
+  // 读取文件夹内容（递归），保留路径信息
+  const readDirectory = async (dirEntry: any, basePath: string = ''): Promise<FileWithPath[]> => {
+    const files: FileWithPath[] = [];
     const reader = dirEntry.createReader();
 
     const readEntries = (): Promise<any[]> => {
@@ -224,9 +263,21 @@ export default function HomePage() {
           const file: File = await new Promise((resolve, reject) => {
             entry.file(resolve, reject);
           });
-          files.push(file);
+
+          // 计算相对路径
+          const relativePath = basePath ? `${basePath}/${file.name}` : file.name;
+
+          // 构造 FileWithPath 对象
+          files.push({
+            file,
+            relativePath,
+            displayName: file.name,
+            flattenedName: flattenPath(relativePath),
+          });
         } else if (entry.isDirectory) {
-          const subFiles = await readDirectory(entry);
+          // 递归读取子目录，传递累积的路径
+          const subPath = basePath ? `${basePath}/${entry.name}` : entry.name;
+          const subFiles = await readDirectory(entry, subPath);
           files.push(...subFiles);
         }
       }

@@ -98,3 +98,11 @@ export interface EpisodesResponse {
   episodes: Episode[];
   total: number;
 }
+
+// 带路径信息的文件对象（用于嵌套文件夹上传）
+export interface FileWithPath {
+  file: File;              // 原始 File 对象
+  relativePath: string;    // 相对路径（例如: "第一季/001.mp3"）
+  displayName: string;     // 原始文件名（例如: "001.mp3"）
+  flattenedName: string;   // 扁平化文件名（例如: "第一季-001.mp3"）
+}

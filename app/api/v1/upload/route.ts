@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { writeFile } from 'fs/promises';
+import { writeFile, access } from 'fs/promises';
 import { join, basename } from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '@/lib/db';
@@ -39,6 +39,7 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
     const podcastId = formData.get('podcastId') as string | null;
+    const targetFileName = formData.get('targetFileName') as string | null;  // 新增：目标文件名
 
     // 3. 验证必填字段
     if (!file || !podcastId) {
@@ -95,23 +96,54 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 7. 提取音频元数据
+    // 7. 确定最终文件名
+    let finalFileName: string;
+
+    if (targetFileName) {
+      // 使用前端提供的扁平化文件名
+      finalFileName = basename(targetFileName);  // 防止路径注入
+
+      // 验证文件名安全性（防止恶意路径）
+      if (finalFileName.includes('/') || finalFileName.includes('\\') || finalFileName.includes('..')) {
+        return jsonResponse(
+          fail({ targetFileName: 'Invalid file name' }),
+          HTTP_STATUS.BAD_REQUEST
+        );
+      }
+    } else {
+      // 向后兼容：使用原始文件名
+      finalFileName = basename(file.name);
+    }
+
+    // 8. 提取音频元数据
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    // 只使用文件名，去掉可能的路径（webkitdirectory 会包含相对路径）
-    const fileName = basename(file.name);
-
     // 提取音频元数据（时长等）
-    const metadata = await extractMetadataFromBuffer(buffer, fileName);
+    const metadata = await extractMetadataFromBuffer(buffer, finalFileName);
 
     const podcastDir = getLocalPath(podcast.userId, podcast.dirName);
-    const filePath = join(podcastDir, fileName);
+    const filePath = join(podcastDir, finalFileName);
 
-    // 8. 保存文件
+    // 9. 检查文件冲突（如果文件已存在，添加时间戳后缀）
+    let actualFilePath = filePath;
     try {
-      await writeFile(filePath, buffer);
-      console.log(`[POST /api/v1/upload] File saved: ${filePath}`);
+      await access(actualFilePath);
+      // 文件已存在，添加时间戳
+      const ext = finalFileName.substring(finalFileName.lastIndexOf('.'));
+      const base = finalFileName.substring(0, finalFileName.lastIndexOf('.'));
+      const timestamp = Date.now();
+      finalFileName = `${base}-${timestamp}${ext}`;
+      actualFilePath = join(podcastDir, finalFileName);
+      console.log(`[POST /api/v1/upload] File exists, renamed to: ${finalFileName}`);
+    } catch {
+      // 文件不存在，使用原文件名
+    }
+
+    // 10. 保存文件
+    try {
+      await writeFile(actualFilePath, buffer);
+      console.log(`[POST /api/v1/upload] File saved: ${actualFilePath}`);
     } catch (err) {
       console.error('[POST /api/v1/upload] Failed to save file:', err);
       return jsonResponse(
@@ -120,15 +152,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 9. 创建数据库记录
+    // 11. 创建数据库记录
     try {
       const episodeId = uuidv4();
       await db.insert(episodes).values({
         id: episodeId,
         podcastId: podcastId,
-        fileName: fileName,
+        fileName: finalFileName,  // 使用最终的文件名
         fileSize: file.size,
-        title: metadata.title || fileName,
+        title: metadata.title || finalFileName,
         description: metadata.album || metadata.artist || '',
         pubDate: new Date(),
         duration: metadata.duration || 0,
@@ -149,7 +181,7 @@ export async function POST(request: NextRequest) {
     // 11. 返回成功响应
     return jsonResponse(
       success({
-        fileName: fileName,
+        fileName: finalFileName,  // 使用最终的文件名
         fileSize: file.size,
         message: 'File uploaded successfully',
       }),

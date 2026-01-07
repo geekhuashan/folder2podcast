@@ -134,10 +134,19 @@ export const podcastsAPI = {
 // 上传 API
 export const uploadAPI = {
   // 上传音频文件
-  async uploadAudio(file: File, podcastId: string): Promise<JSendResponse<UploadFileResponse>> {
+  async uploadAudio(
+    file: File,
+    podcastId: string,
+    targetFileName?: string  // 新增：目标文件名（可选）
+  ): Promise<JSendResponse<UploadFileResponse>> {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('podcastId', podcastId);
+
+    // 如果提供了目标文件名，则添加到 FormData
+    if (targetFileName) {
+      formData.append('targetFileName', targetFileName);
+    }
 
     return apiRequest<UploadFileResponse>('/upload', {
       method: 'POST',
