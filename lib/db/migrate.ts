@@ -3,6 +3,7 @@ import { db } from './index';
 import { users } from './schema';
 import { eq } from 'drizzle-orm';
 import { generateAccessKey } from '@/lib/middleware/auth';
+import { authConfig } from '@/lib/config';
 
 /**
  * 运行数据库迁移
@@ -20,61 +21,61 @@ async function runMigrations() {
 }
 
 /**
- * 从环境变量创建初始管理员用户（如果指定了且不存在）
+ * 从环境变量批量创建初始用户（如果指定了且不存在）
  */
-async function createInitialAdminFromEnv() {
-  const username = process.env.ADMIN_USERNAME;
-  const password = process.env.ADMIN_PASSWORD;
+async function createInitialUsersFromEnv() {
+  const initialUsers = authConfig.initialUsers;
 
-  // 如果没有提供用户名或密码，跳过创建
-  if (!username || !password) {
-    console.log('ℹ️  未提供 ADMIN_USERNAME 和 ADMIN_PASSWORD，跳过初始管理员创建');
+  if (initialUsers.length === 0) {
+    console.log('ℹ️  开放注册模式：未提供初始用户配置');
     console.log('   用户需要通过注册页面自行注册');
     return;
   }
 
-  try {
-    // 检查用户是否已存在
-    const existingUser = await db
-      .select()
-      .from(users)
-      .where(eq(users.username, username))
-      .get();
+  console.log(`👤 检测到 ${initialUsers.length} 个初始用户，开始创建...`);
 
-    if (existingUser) {
-      console.log(`👤 用户 "${username}" 已存在，跳过创建`);
-      return;
+  for (const user of initialUsers) {
+    try {
+      // 检查用户是否已存在
+      const existingUser = await db
+        .select()
+        .from(users)
+        .where(eq(users.username, user.username))
+        .get();
+
+      if (existingUser) {
+        console.log(`  ⏭️  用户 "${user.username}" 已存在，跳过`);
+        continue;
+      }
+
+      // 生成 Access Key
+      const accessKey = generateAccessKey();
+
+      // 创建用户
+      await db
+        .insert(users)
+        .values({
+          id: user.username,
+          username: user.username,
+          accessKey,
+          password: user.password,
+        })
+        .returning()
+        .get();
+
+      console.log(`  ✅ 用户 "${user.username}" 创建成功`);
+      console.log(`     Access Key: ${accessKey}`);
+    } catch (error) {
+      console.error(`  ❌ 创建用户 "${user.username}" 失败:`, error);
+      // 不中断启动流程，继续创建其他用户
     }
+  }
 
-    console.log(`👤 创建初始管理员用户: ${username}...`);
-
-    // 生成 Access Key
-    const accessKey = generateAccessKey();
-
-    // 创建管理员用户
-    await db
-      .insert(users)
-      .values({
-        id: username,
-        username,
-        accessKey,
-        password,
-      })
-      .returning()
-      .get();
-
-    console.log('✅ 初始管理员用户创建成功！');
+  // 显示注册状态
+  if (!authConfig.enableRegistration) {
     console.log('');
-    console.log('  登录信息：');
-    console.log(`    用户名: ${username}`);
-    console.log(`    密码: ${password}`);
-    console.log('');
-    console.log('  Access Key（用于 API 调用）：');
-    console.log(`    ${accessKey}`);
-    console.log('');
-  } catch (error) {
-    console.error('❌ 创建初始管理员用户失败:', error);
-    // 不中断启动流程，只是记录错误
+    console.log('🔒 注册功能已关闭（固定用户模式）');
+    console.log('   其他用户无法通过注册页面创建账号');
   }
 }
 
@@ -83,7 +84,7 @@ async function createInitialAdminFromEnv() {
  */
 async function initDatabase() {
   await runMigrations();
-  await createInitialAdminFromEnv();
+  await createInitialUsersFromEnv();
 }
 
 initDatabase();

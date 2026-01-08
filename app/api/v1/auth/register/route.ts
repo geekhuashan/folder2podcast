@@ -26,10 +26,10 @@ export { RegisterRequest, RegisterResponseData };
  */
 export async function POST(request: NextRequest) {
   try {
-    // 检查是否允许注册
+    // 检查是否允许注册（自动判断）
     if (!authConfig.enableRegistration) {
       return jsonResponse(
-        error('注册功能已关闭', HTTP_STATUS.FORBIDDEN),
+        error('注册功能已关闭（固定用户模式）', HTTP_STATUS.FORBIDDEN),
         HTTP_STATUS.FORBIDDEN
       );
     }

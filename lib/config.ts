@@ -3,25 +3,30 @@
  * 集中管理所有环境变量，提供类型安全的访问方式
  */
 
-import crypto from 'crypto';
-
 /**
- * 生成管理员 Access Key
- * 基于用户名和密码生成确定性的 Key，确保修改密码后旧 Key 失效
+ * 解析 USERS 环境变量
+ * 格式：user1:pass1,user2:pass2,user3:pass3
+ *
+ * @param usersEnv - USERS 环境变量的值
+ * @returns 解析后的用户数组
  */
-function generateAdminAccessKey(username: string, password: string): string {
-  if (!username || !password) {
-    return '';
+function parseUsersFromEnv(usersEnv?: string): Array<{ username: string; password: string }> {
+  if (!usersEnv) return [];
+
+  const users: Array<{ username: string; password: string }> = [];
+  const pairs = usersEnv.split(',');
+
+  for (const pair of pairs) {
+    const [username, password] = pair.split(':').map(s => s.trim());
+
+    if (username && password) {
+      users.push({ username, password });
+    } else {
+      console.warn(`[Config] Invalid user format: "${pair}", expected "username:password"`);
+    }
   }
 
-  // 使用 SHA-256 哈希生成确定性的 Access Key
-  const hash = crypto
-    .createHash('sha256')
-    .update(`${username}:${password}`)
-    .digest('hex');
-
-  // 取前 32 位，加上 fp_ 前缀（总长度 35）
-  return `fp_${hash.slice(0, 32)}`;
+  return users;
 }
 
 /**
@@ -69,24 +74,44 @@ export const authConfig = {
   // Access Key 长度（不包含前缀）
   keyLength: 32,
 
-  // 是否允许用户注册（默认 true）
-  enableRegistration: process.env.ENABLE_REGISTRATION !== 'false',
+  // 批量用户配置（新增）
+  // 通过 USERS 环境变量批量创建固定用户
+  // 格式：user1:pass1,user2:pass2,user3:pass3
+  users: parseUsersFromEnv(process.env.USERS),
 
-  // 管理员账号配置（可选）
-  // 如果设置了管理员账号，可以使用管理员账号密码直接登录，无需数据库
-  // Access Key 会基于用户名和密码自动生成
+  // 单用户管理员配置（兼容旧配置）
+  // 如果设置了 ADMIN_USERNAME 和 ADMIN_PASSWORD，将创建单个管理员用户
   admin: {
     username: process.env.ADMIN_USERNAME || '',
     password: process.env.ADMIN_PASSWORD || '',
-    // Access Key 自动生成（不再从环境变量读取）
-    get accessKey() {
-      return generateAdminAccessKey(this.username, this.password);
-    },
   },
 
-  // 是否启用了管理员账号
-  get hasAdminAccount() {
-    return Boolean(this.admin.username && this.admin.password);
+  // 是否允许用户注册（自动判断）
+  // - 如果设置了 USERS 或 ADMIN_USERNAME，禁止注册（固定用户模式）
+  // - 如果都没设置，允许注册（开放注册模式）
+  get enableRegistration() {
+    return !this.users.length && !this.admin.username;
+  },
+
+  // 获取所有初始用户（包括管理员和批量用户）
+  // 优先使用 USERS，其次使用 ADMIN_USERNAME
+  get initialUsers() {
+    const users: Array<{ username: string; password: string }> = [];
+
+    // 优先使用 USERS（如果设置了）
+    if (this.users.length > 0) {
+      return this.users;
+    }
+
+    // 其次使用 ADMIN_USERNAME（如果设置了）
+    if (this.admin.username && this.admin.password) {
+      users.push({
+        username: this.admin.username,
+        password: this.admin.password,
+      });
+    }
+
+    return users;
   },
 };
 

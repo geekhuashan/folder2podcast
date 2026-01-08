@@ -98,19 +98,80 @@ docker-compose up -d
 **启动后日志会显示：**
 
 ```
-✅ 初始管理员用户创建成功！
+👤 检测到 1 个初始用户，开始创建...
+  ✅ 用户 "admin" 创建成功
+     Access Key: fp_xxxxxxxxxx
 
-  登录信息：
-    用户名: admin
-    密码: your_secure_password
-
-  Access Key（用于 API 调用）：
-    fp_xxxxxxxxxx
+🔒 注册功能已关闭（固定用户模式）
+   其他用户无法通过注册页面创建账号
 ```
 
 使用管理员用户名和密码登录即可。
 
-#### 模式二：公开部署（开放注册，用户自行注册）
+#### 模式二：固定多用户模式（团队部署）
+
+适用于团队协作场景，通过环境变量批量创建固定用户，禁止公开注册。
+
+**Docker 命令：**
+
+```bash
+docker run -d \
+  --name folder2podcast \
+  -p 3100:3100 \
+  -v /path/to/audio:/app/audio \
+  -v /path/to/data:/app/data \
+  -e BASE_URL=http://your-server-ip \
+  -e USERS=admin:pass123,alice:pass456,bob:pass789 \
+  --restart unless-stopped \
+  yaotutu/folder2podcast:latest
+```
+
+**Docker Compose：**
+
+创建 `docker-compose.yml`：
+
+```yaml
+version: '3.8'
+
+services:
+  folder2podcast:
+    image: yaotutu/folder2podcast:latest
+    container_name: folder2podcast
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./audio:/app/audio        # 音频文件存储目录
+      - ./data:/app/data          # 数据库存储目录
+    environment:
+      - BASE_URL=http://192.168.1.100  # 修改为你的服务器IP或域名
+      - USERS=admin:pass123,alice:pass456,bob:pass789  # 固定用户列表
+    restart: unless-stopped
+```
+
+启动：
+
+```bash
+docker-compose up -d
+```
+
+**启动后日志会显示：**
+
+```
+👤 检测到 3 个初始用户，开始创建...
+  ✅ 用户 "admin" 创建成功
+     Access Key: fp_xxxxxxxxxx
+  ✅ 用户 "alice" 创建成功
+     Access Key: fp_yyyyyyyyyy
+  ✅ 用户 "bob" 创建成功
+     Access Key: fp_zzzzzzzzzz
+
+🔒 注册功能已关闭（固定用户模式）
+   其他用户无法通过注册页面创建账号
+```
+
+每个用户可以使用各自的用户名和密码登录。
+
+#### 模式三：公开部署（开放注册，用户自行注册）
 
 适用于多用户场景，允许用户通过注册页面自行创建账号。
 
@@ -157,7 +218,7 @@ docker-compose up -d
 **启动后日志会显示：**
 
 ```
-ℹ️  未提供 ADMIN_USERNAME 和 ADMIN_PASSWORD，跳过初始管理员创建
+ℹ️  开放注册模式：未提供初始用户配置
    用户需要通过注册页面自行注册
 ```
 
@@ -223,19 +284,27 @@ BASE_URL=http://localhost          # 服务器基础 URL（必须配置！）
 DATABASE_URL=./data/podcasts.db    # SQLite 数据库文件路径
 
 # ========================================
-# 用户认证配置（两种模式）
+# 用户认证配置（三种模式）
 # ========================================
-# 模式一：私有部署（指定管理员账号）
-# - 同时设置 ADMIN_USERNAME 和 ADMIN_PASSWORD
+# 模式一：单用户模式（私有部署）
+# - 设置 ADMIN_USERNAME 和 ADMIN_PASSWORD
 # - 容器启动时自动创建管理员用户
-# - 用户无需注册，直接使用管理员账号登录
+# - 自动禁止注册（仅允许管理员使用）
 ADMIN_USERNAME=admin               # 管理员用户名（可选）
 ADMIN_PASSWORD=your_password       # 管理员密码（可选）
 
-# 模式二：公开部署（开放注册）
-# - 不设置 ADMIN_USERNAME 和 ADMIN_PASSWORD
-# - 用户通过 /register 页面自行注册
-# - 适合多用户场景
+# 模式二：固定多用户模式（团队部署）
+# - 设置 USERS（格式：user1:pass1,user2:pass2）
+# - 容器启动时批量创建固定用户
+# - 自动禁止注册（仅允许指定用户使用）
+# - 优先级高于 ADMIN_USERNAME
+USERS=admin:pass123,alice:pass456,bob:pass789  # 固定用户列表（可选）
+
+# 模式三：开放注册模式（公开部署）
+# - 不设置 ADMIN_USERNAME 和 USERS
+# - 自动允许用户通过 /register 页面自行注册
+# - 适合公开服务或需要开放注册的场景
+# （留空或不配置）
 ```
 
 ### 配置说明
@@ -257,33 +326,50 @@ BASE_URL=http://localhost
 BASE_URL=http://192.168.1.100
 ```
 
-#### 2. 用户认证配置（两种模式）
+#### 2. 用户认证配置（三种模式）
 
-**模式一：私有部署（推荐个人使用）**
+**模式一：单用户模式（推荐个人使用）**
 
 ```bash
-# 同时设置用户名和密码
+# 设置管理员用户名和密码
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=your_secure_password
 ```
 
 特点：
 - ✅ 容器启动时自动创建管理员账号
+- ✅ 自动禁止注册（仅允许管理员使用）
 - ✅ 无需手动注册，直接登录
-- ✅ 适合个人或小团队使用
+- ✅ 适合个人或单用户使用
 - ⚠️ 请务必修改默认密码！
 
-**模式二：公开部署（多用户场景）**
+**模式二：固定多用户模式（推荐团队使用）**
 
 ```bash
-# 不设置 ADMIN_USERNAME 和 ADMIN_PASSWORD
+# 设置固定用户列表（逗号分隔，格式：username:password）
+USERS=admin:pass123,alice:pass456,bob:pass789
+```
+
+特点：
+- ✅ 容器启动时批量创建所有用户
+- ✅ 自动禁止注册（仅允许指定用户使用）
+- ✅ 每个用户拥有独立的播客库
+- ✅ 适合固定团队协作
+- ⚠️ 优先级高于 ADMIN_USERNAME（同时设置时会忽略 ADMIN_USERNAME）
+- ⚠️ 请注意密码安全，建议使用环境变量管理工具
+
+**模式三：开放注册模式（公开服务）**
+
+```bash
+# 不设置 ADMIN_USERNAME 和 USERS
 # 或完全删除这两个环境变量
 ```
 
 特点：
+- ✅ 自动允许注册（任何人都可以注册账号）
 - ✅ 用户通过注册页面自行创建账号
 - ✅ 支持多用户独立播客库
-- ✅ 适合公开服务或团队协作
+- ✅ 适合公开服务或需要开放注册的场景
 - ⚠️ 注意控制注册权限和存储空间
 
 #### 3. DATABASE_URL
@@ -305,7 +391,7 @@ Docker 启动时的优先级：
 
 ### 配置示例
 
-**示例一：私有个人博客转播客**
+**示例一：个人播客（单用户模式）**
 
 ```env
 BASE_URL=https://podcast.example.com
@@ -313,19 +399,18 @@ ADMIN_USERNAME=myblog
 ADMIN_PASSWORD=super_secret_password_123
 ```
 
-**示例二：企业内部培训音频平台**
+**示例二：团队协作（固定多用户模式）**
 
 ```env
 BASE_URL=http://192.168.10.50
-ADMIN_USERNAME=training_admin
-ADMIN_PASSWORD=company_secure_pass
+USERS=admin:admin123,alice:alice456,bob:bob789
 ```
 
-**示例三：公开播客托管服务**
+**示例三：公开播客托管服务（开放注册模式）**
 
 ```env
 BASE_URL=https://podcast-host.com
-# 不设置 ADMIN_USERNAME 和 ADMIN_PASSWORD
+# 不设置 ADMIN_USERNAME 和 USERS
 # 用户自行注册
 ```
 
@@ -335,7 +420,7 @@ BASE_URL=https://podcast-host.com
 
 根据你的部署模式选择登录方式：
 
-#### 模式一：私有部署（已设置管理员账号）
+#### 模式一：单用户模式
 
 如果你在启动容器时设置了 `ADMIN_USERNAME` 和 `ADMIN_PASSWORD`：
 
@@ -345,16 +430,28 @@ BASE_URL=https://podcast-host.com
 
 Access Key 格式：`fp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
 
-#### 模式二：公开部署（开放注册）
+#### 模式二：固定多用户模式
 
-如果你没有设置管理员账号：
+如果你在启动容器时设置了 `USERS`：
+
+1. 访问 `http://your-server-ip:3100`
+2. 使用你在 `USERS` 中配置的任意用户名和密码登录
+3. 每个用户拥有独立的 Access Key 和播客库
+
+**示例**：如果配置了 `USERS=admin:pass123,alice:pass456`
+- 可以使用 `admin` / `pass123` 登录
+- 也可以使用 `alice` / `pass456` 登录
+
+#### 模式三：开放注册模式
+
+如果你没有设置 `ADMIN_USERNAME` 和 `USERS`：
 
 1. 访问 `http://your-server-ip:3100`
 2. 点击"注册"按钮创建新账号
-3. 输入用户名和密码（密码可选）
+3. 输入用户名和密码
 4. 注册成功后自动登录，获得 Access Key
 
-**命令行创建用户（适用于本地开发）：**
+**命令行创建用户（适用于开发调试）：**
 
 ```bash
 # 进入容器
@@ -362,10 +459,10 @@ docker exec -it folder2podcast sh
 
 # 创建用户
 cd /app
-tsx lib/db/create-user.ts <username> <password>
+npx tsx lib/db/create-user.ts <username> <password>
 
 # 示例
-tsx lib/db/create-user.ts myuser mypassword
+npx tsx lib/db/create-user.ts myuser mypassword
 ```
 
 系统会显示生成的 Access Key。
@@ -598,29 +695,37 @@ folder2podcast/
 
 A: 这取决于你的部署模式：
 
-**情况一：私有部署模式**
+**情况一：单用户模式**
 - 确保启动时设置了 `ADMIN_USERNAME` 和 `ADMIN_PASSWORD`
 - 查看容器日志确认用户是否创建成功：
   ```bash
   docker logs folder2podcast
   ```
-- 应该能看到 "✅ 初始管理员用户创建成功" 的日志
+- 应该能看到 "✅ 用户 'xxx' 创建成功" 的日志
 
-**情况二：公开部署模式**
-- 如果没有设置管理员账号，访问注册页面创建用户
+**情况二：固定多用户模式**
+- 确保启动时设置了 `USERS=user1:pass1,user2:pass2`
+- 查看容器日志确认所有用户是否创建成功
+- 应该能看到 "👤 检测到 N 个初始用户，开始创建..." 的日志
+
+**情况三：开放注册模式**
+- 如果没有设置 `ADMIN_USERNAME` 和 `USERS`，访问注册页面创建用户
 - 或者进入容器手动创建：
   ```bash
   docker exec -it folder2podcast sh
   cd /app
-  tsx lib/db/create-user.ts admin your_password
+  npx tsx lib/db/create-user.ts admin your_password
   ```
 
 ### Q: 如何切换部署模式？
 
 A:
-- **从公开切换到私有**：添加环境变量 `ADMIN_USERNAME` 和 `ADMIN_PASSWORD`，重启容器
-- **从私有切换到公开**：移除这两个环境变量，重启容器
+- **切换到单用户模式**：设置 `ADMIN_USERNAME` 和 `ADMIN_PASSWORD`，重启容器
+- **切换到固定多用户模式**：设置 `USERS=user1:pass1,user2:pass2`，重启容器
+- **切换到开放注册模式**：移除 `ADMIN_USERNAME` 和 `USERS` 环境变量，重启容器
 - 已创建的用户不会被删除，仍然可以正常使用
+
+**注意**：`USERS` 优先级高于 `ADMIN_USERNAME`，如果同时设置，只会创建 `USERS` 中的用户。
 
 ### Q: 忘记密码怎么办？
 
