@@ -45,61 +45,123 @@ Folder2Podcast 是一个强大的播客管理系统，让你能够**一键将本
 
 Docker 部署是最简单快捷的方式，无需配置环境依赖。
 
-#### 1. 使用 Docker Compose（推荐）
+根据使用场景选择部署模式：
 
-创建 `docker-compose.yml` 文件：
+#### 模式一：私有部署（仅自己使用，指定管理员账号）
+
+适用于个人使用或小团队，通过环境变量指定管理员账号，无需注册。
+
+**Docker 命令：**
+
+```bash
+docker run -d \
+  --name folder2podcast \
+  -p 3100:3100 \
+  -v /path/to/audio:/app/audio \
+  -v /path/to/data:/app/data \
+  -e BASE_URL=http://your-server-ip \
+  -e ADMIN_USERNAME=admin \
+  -e ADMIN_PASSWORD=your_secure_password \
+  --restart unless-stopped \
+  yaotutu/folder2podcast:latest
+```
+
+**Docker Compose：**
+
+创建 `docker-compose.yml`：
 
 ```yaml
 version: '3.8'
 
 services:
   folder2podcast:
-    image: folder2podcast:latest
+    image: yaotutu/folder2podcast:latest
     container_name: folder2podcast
     ports:
       - "3100:3100"
     volumes:
-      - ./podcasts:/podcasts      # 音频文件存储目录
+      - ./audio:/app/audio        # 音频文件存储目录
       - ./data:/app/data          # 数据库存储目录
     environment:
-      - PORT=3100
-      - BASE_URL=http://localhost  # 修改为你的域名或IP
-      - ADMIN_USERNAME=admin       # 管理员用户名
-      - ADMIN_PASSWORD=your_secure_password  # 管理员密码
-      - ENABLE_REGISTRATION=false  # 可选：关闭公开注册
+      - BASE_URL=http://192.168.1.100  # 修改为你的服务器IP或域名
+      - ADMIN_USERNAME=admin            # 管理员用户名
+      - ADMIN_PASSWORD=your_secure_password  # 管理员密码（请务必修改）
     restart: unless-stopped
 ```
 
-启动服务：
+启动：
 
 ```bash
-# 构建镜像
-docker build -t folder2podcast .
-
-# 启动服务
 docker-compose up -d
-
-# 查看日志
-docker-compose logs -f
 ```
 
-#### 2. 直接使用 Docker
+**启动后日志会显示：**
+
+```
+✅ 初始管理员用户创建成功！
+
+  登录信息：
+    用户名: admin
+    密码: your_secure_password
+
+  Access Key（用于 API 调用）：
+    fp_xxxxxxxxxx
+```
+
+使用管理员用户名和密码登录即可。
+
+#### 模式二：公开部署（开放注册，用户自行注册）
+
+适用于多用户场景，允许用户通过注册页面自行创建账号。
+
+**Docker 命令：**
 
 ```bash
-# 构建镜像
-docker build -t folder2podcast .
-
-# 运行容器
 docker run -d \
   --name folder2podcast \
   -p 3100:3100 \
-  -v $(pwd)/podcasts:/podcasts \
-  -v $(pwd)/data:/app/data \
-  -e BASE_URL=http://localhost \
-  -e ADMIN_USERNAME=admin \
-  -e ADMIN_PASSWORD=your_secure_password \
-  folder2podcast
+  -v /path/to/audio:/app/audio \
+  -v /path/to/data:/app/data \
+  -e BASE_URL=http://your-server-ip \
+  --restart unless-stopped \
+  yaotutu/folder2podcast:latest
 ```
+
+**Docker Compose：**
+
+创建 `docker-compose.yml`：
+
+```yaml
+version: '3.8'
+
+services:
+  folder2podcast:
+    image: yaotutu/folder2podcast:latest
+    container_name: folder2podcast
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./audio:/app/audio        # 音频文件存储目录
+      - ./data:/app/data          # 数据库存储目录
+    environment:
+      - BASE_URL=http://192.168.1.100  # 修改为你的服务器IP或域名
+    restart: unless-stopped
+```
+
+启动：
+
+```bash
+docker-compose up -d
+```
+
+**启动后日志会显示：**
+
+```
+ℹ️  未提供 ADMIN_USERNAME 和 ADMIN_PASSWORD，跳过初始管理员创建
+   用户需要通过注册页面自行注册
+```
+
+用户访问 `http://your-server-ip:3100` 后在注册页面创建账号。
 
 访问 `http://localhost:3100` 即可开始使用。
 
@@ -146,53 +208,167 @@ npm start
 
 ## 🔧 环境变量配置
 
-在 `.env` 文件中配置以下参数：
+### 完整环境变量列表
 
 ```env
+# ========================================
 # 服务器配置
-PORT=3100                          # 服务器端口
-BASE_URL=http://localhost          # 服务器基础 URL（生产环境改为你的域名）
+# ========================================
+PORT=3100                          # 服务器端口（默认 3100）
+BASE_URL=http://localhost          # 服务器基础 URL（必须配置！）
 
+# ========================================
 # 数据库配置
-DATABASE_URL=./data/podcasts.db    # 数据库文件路径
+# ========================================
+DATABASE_URL=./data/podcasts.db    # SQLite 数据库文件路径
 
-# 认证配置
-ENABLE_REGISTRATION=true           # 是否允许用户注册（false 则只能使用管理员账号）
-ADMIN_USERNAME=admin               # 管理员用户名
-ADMIN_PASSWORD=your_password       # 管理员密码
+# ========================================
+# 用户认证配置（两种模式）
+# ========================================
+# 模式一：私有部署（指定管理员账号）
+# - 同时设置 ADMIN_USERNAME 和 ADMIN_PASSWORD
+# - 容器启动时自动创建管理员用户
+# - 用户无需注册，直接使用管理员账号登录
+ADMIN_USERNAME=admin               # 管理员用户名（可选）
+ADMIN_PASSWORD=your_password       # 管理员密码（可选）
+
+# 模式二：公开部署（开放注册）
+# - 不设置 ADMIN_USERNAME 和 ADMIN_PASSWORD
+# - 用户通过 /register 页面自行注册
+# - 适合多用户场景
 ```
 
 ### 配置说明
 
-- **BASE_URL**：非常重要！必须设置为你的服务器实际访问地址
-  - 开发环境：`http://localhost`
-  - 局域网：`http://192.168.1.100`
-  - 生产环境：`http://your-domain.com` 或 `https://your-domain.com`
+#### 1. BASE_URL（重要！必须配置）
 
-- **管理员账号**：设置后会自动生成管理员 Access Key，可直接登录使用
+RSS Feed 和文件 URL 都基于此地址生成，**必须设置为服务器的实际访问地址**：
+
+- **本地开发**：`http://localhost`
+- **局域网部署**：`http://192.168.1.100`（局域网 IP）
+- **公网部署**：`http://your-domain.com` 或 `https://your-domain.com`
+
+**错误示例**：
+```bash
+# ❌ 错误：使用 localhost 会导致外部设备无法订阅
+BASE_URL=http://localhost
+
+# ✅ 正确：使用服务器实际 IP
+BASE_URL=http://192.168.1.100
+```
+
+#### 2. 用户认证配置（两种模式）
+
+**模式一：私有部署（推荐个人使用）**
+
+```bash
+# 同时设置用户名和密码
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=your_secure_password
+```
+
+特点：
+- ✅ 容器启动时自动创建管理员账号
+- ✅ 无需手动注册，直接登录
+- ✅ 适合个人或小团队使用
+- ⚠️ 请务必修改默认密码！
+
+**模式二：公开部署（多用户场景）**
+
+```bash
+# 不设置 ADMIN_USERNAME 和 ADMIN_PASSWORD
+# 或完全删除这两个环境变量
+```
+
+特点：
+- ✅ 用户通过注册页面自行创建账号
+- ✅ 支持多用户独立播客库
+- ✅ 适合公开服务或团队协作
+- ⚠️ 注意控制注册权限和存储空间
+
+#### 3. DATABASE_URL
+
+SQLite 数据库文件路径，默认为 `./data/podcasts.db`。
+
+Docker 部署时建议使用 Volume 挂载：
+```bash
+-v /path/to/data:/app/data
+```
+
+### 环境变量优先级
+
+Docker 启动时的优先级：
+1. Docker 命令行 `-e` 参数（最高优先级）
+2. Docker Compose 的 `environment` 配置
+3. `.env` 文件（本地开发）
+4. 默认值
+
+### 配置示例
+
+**示例一：私有个人博客转播客**
+
+```env
+BASE_URL=https://podcast.example.com
+ADMIN_USERNAME=myblog
+ADMIN_PASSWORD=super_secret_password_123
+```
+
+**示例二：企业内部培训音频平台**
+
+```env
+BASE_URL=http://192.168.10.50
+ADMIN_USERNAME=training_admin
+ADMIN_PASSWORD=company_secure_pass
+```
+
+**示例三：公开播客托管服务**
+
+```env
+BASE_URL=https://podcast-host.com
+# 不设置 ADMIN_USERNAME 和 ADMIN_PASSWORD
+# 用户自行注册
+```
 
 ## 📖 使用指南
 
-### 1. 获取 Access Key
+### 1. 首次登录
 
-#### 方式 A：使用管理员账号（推荐）
+根据你的部署模式选择登录方式：
 
-如果你在 `.env` 中配置了管理员账号：
+#### 模式一：私有部署（已设置管理员账号）
 
-1. 访问 `http://localhost:3100`
-2. 使用管理员用户名和密码登录
-3. 系统会自动返回 Access Key
+如果你在启动容器时设置了 `ADMIN_USERNAME` 和 `ADMIN_PASSWORD`：
 
-#### 方式 B：创建普通用户
+1. 访问 `http://your-server-ip:3100`
+2. 输入管理员用户名和密码登录
+3. 系统会返回你的 Access Key（用于 API 调用）
+
+Access Key 格式：`fp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
+
+#### 模式二：公开部署（开放注册）
+
+如果你没有设置管理员账号：
+
+1. 访问 `http://your-server-ip:3100`
+2. 点击"注册"按钮创建新账号
+3. 输入用户名和密码（密码可选）
+4. 注册成功后自动登录，获得 Access Key
+
+**命令行创建用户（适用于本地开发）：**
 
 ```bash
-# 如果允许注册，可以在 Web 界面注册
-# 或使用命令行创建用户
-npm run create-user
+# 进入容器
+docker exec -it folder2podcast sh
 
-# 按提示输入用户名和密码
-# 系统会显示生成的 Access Key：fp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+# 创建用户
+cd /app
+tsx lib/db/create-user.ts <username> <password>
+
+# 示例
+tsx lib/db/create-user.ts myuser mypassword
 ```
+
+系统会显示生成的 Access Key。
 
 ### 2. Web 界面管理
 
@@ -357,13 +533,117 @@ folder2podcast/
 
 ## 🔒 安全建议
 
-1. **修改默认密码**：部署到生产环境时，务必修改 `ADMIN_PASSWORD`
-2. **使用 HTTPS**：生产环境建议配置 SSL 证书
-3. **限制注册**：如果不需要多用户，设置 `ENABLE_REGISTRATION=false`
-4. **防火墙配置**：限制 API 访问来源
-5. **定期备份**：备份 `data/` 目录和 `audio/` 目录
+### Docker 部署安全
+
+1. **务必修改默认密码**
+   ```bash
+   # ❌ 危险：使用默认密码
+   -e ADMIN_PASSWORD=admin
+
+   # ✅ 安全：使用强密码
+   -e ADMIN_PASSWORD=MyStr0ng_P@ssw0rd_2024
+   ```
+
+2. **私有部署模式（推荐）**
+   - 设置 `ADMIN_USERNAME` 和 `ADMIN_PASSWORD`
+   - 仅供个人或团队内部使用
+   - 不对外开放注册
+
+3. **公开部署需谨慎**
+   - 如果不设置管理员账号，任何人都可以注册
+   - 建议配置存储配额限制
+   - 建议设置定期清理策略
+
+### 生产环境建议
+
+1. **使用 HTTPS**
+   ```bash
+   # 配置反向代理（Nginx/Caddy）
+   BASE_URL=https://your-domain.com
+   ```
+
+2. **限制网络访问**
+   ```bash
+   # 仅允许局域网访问
+   -p 127.0.0.1:3100:3100
+
+   # 或配置防火墙规则
+   ufw allow from 192.168.1.0/24 to any port 3100
+   ```
+
+3. **定期备份数据**
+   ```bash
+   # 备份数据库和音频文件
+   tar -czf backup-$(date +%Y%m%d).tar.gz data/ audio/
+   ```
+
+4. **监控资源使用**
+   ```bash
+   # 查看容器资源占用
+   docker stats folder2podcast
+   ```
+
+5. **日志管理**
+   ```bash
+   # 限制日志大小
+   docker run -d \
+     --log-opt max-size=10m \
+     --log-opt max-file=3 \
+     ...
+   ```
 
 ## 🐛 常见问题
+
+### Q: Docker 启动后没有默认用户，无法登录怎么办？
+
+A: 这取决于你的部署模式：
+
+**情况一：私有部署模式**
+- 确保启动时设置了 `ADMIN_USERNAME` 和 `ADMIN_PASSWORD`
+- 查看容器日志确认用户是否创建成功：
+  ```bash
+  docker logs folder2podcast
+  ```
+- 应该能看到 "✅ 初始管理员用户创建成功" 的日志
+
+**情况二：公开部署模式**
+- 如果没有设置管理员账号，访问注册页面创建用户
+- 或者进入容器手动创建：
+  ```bash
+  docker exec -it folder2podcast sh
+  cd /app
+  tsx lib/db/create-user.ts admin your_password
+  ```
+
+### Q: 如何切换部署模式？
+
+A:
+- **从公开切换到私有**：添加环境变量 `ADMIN_USERNAME` 和 `ADMIN_PASSWORD`，重启容器
+- **从私有切换到公开**：移除这两个环境变量，重启容器
+- 已创建的用户不会被删除，仍然可以正常使用
+
+### Q: 忘记密码怎么办？
+
+A: 进入容器重置密码：
+
+```bash
+# 进入容器
+docker exec -it folder2podcast sh
+
+# 使用 SQLite 修改密码
+cd /app
+sqlite3 data/podcasts.db
+> UPDATE users SET password = 'new_password' WHERE username = 'admin';
+> .quit
+```
+
+或者删除数据库重新开始（会丢失所有数据）：
+
+```bash
+docker exec -it folder2podcast sh
+rm -f /app/data/podcasts.db*
+# 重启容器会自动初始化
+```
 
 ### Q: 上传文件时提示"文件太大"
 
