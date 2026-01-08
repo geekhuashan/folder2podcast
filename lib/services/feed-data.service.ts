@@ -155,7 +155,8 @@ export async function generatePodcastFeedData(
       createdAt: ep.createdAt,
       updatedAt: ep.updatedAt,
       audioUrl: getAudioUrl(podcast.userId, podcast.dirName, ep.fileName),
-      imageUrl: getCoverUrl(podcast.userId, podcast.dirName, ep.coverFileName), // ✅ 直接使用，无需判断
+      // 非空断言安全：上传音频时保证每个剧集都有 coverFileName（复制播客封面或用户上传）
+      imageUrl: getCoverUrl(podcast.userId, podcast.dirName, ep.coverFileName!),
     };
   });
 
