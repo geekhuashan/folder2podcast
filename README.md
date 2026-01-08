@@ -253,11 +253,7 @@ cp .env.example .env
 # 4. 初始化数据库
 npm run db:migrate
 
-# 5. （可选）创建用户
-npm run create-user
-# 按提示输入用户名和密码，系统会生成 Access Key
-
-# 6. 启动开发服务器
+# 5. 启动开发服务器
 npm run dev
 
 # 或者构建后运行生产版本
@@ -450,22 +446,6 @@ Access Key 格式：`fp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
 2. 点击"注册"按钮创建新账号
 3. 输入用户名和密码
 4. 注册成功后自动登录，获得 Access Key
-
-**命令行创建用户（适用于开发调试）：**
-
-```bash
-# 进入容器
-docker exec -it folder2podcast sh
-
-# 创建用户
-cd /app
-npx tsx lib/db/create-user.ts <username> <password>
-
-# 示例
-npx tsx lib/db/create-user.ts myuser mypassword
-```
-
-系统会显示生成的 Access Key。
 
 ### 2. Web 界面管理
 
@@ -710,12 +690,6 @@ A: 这取决于你的部署模式：
 
 **情况三：开放注册模式**
 - 如果没有设置 `ADMIN_USERNAME` 和 `USERS`，访问注册页面创建用户
-- 或者进入容器手动创建：
-  ```bash
-  docker exec -it folder2podcast sh
-  cd /app
-  npx tsx lib/db/create-user.ts admin your_password
-  ```
 
 ### Q: 如何切换部署模式？
 

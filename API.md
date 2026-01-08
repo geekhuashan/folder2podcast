@@ -13,22 +13,40 @@ npm run build
 npm start
 ```
 
-### 2. 创建测试用户
+### 2. 获取 Access Key
+
+**方法一：通过用户名/密码登录**
 
 ```bash
-npm run create-user testuser
+curl -X POST http://localhost:3100/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "admin",
+    "password": "your_password"
+  }'
 ```
 
-这将创建一个用户并生成 Access Key，例如：
+响应示例：
+```json
+{
+  "success": true,
+  "data": {
+    "userId": "admin",
+    "username": "admin",
+    "accessKey": "fp_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6"
+  }
+}
 ```
-✅ 用户创建成功！
 
-用户信息：
-  用户名: testuser
-  用户ID: 550e8400-e29b-41d4-a716-446655440000
+**方法二：通过注册（开放注册模式）**
 
-Access Key（请妥善保管）：
-  fp_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
+```bash
+curl -X POST http://localhost:3100/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "newuser",
+    "password": "newpassword"
+  }'
 ```
 
 **重要：请妥善保管 Access Key，它相当于您的 API 密钥！**
@@ -299,9 +317,14 @@ http://localhost:3100/feed/podcast-uuid
 ### 完整示例：创建播客并上传音频
 
 ```bash
-# 1. 创建用户（只需执行一次）
-npm run create-user myuser
-# 保存输出的 Access Key
+# 1. 登录获取 Access Key（只需执行一次）
+curl -X POST http://localhost:3100/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "admin",
+    "password": "your_password"
+  }'
+# 保存返回的 Access Key
 
 # 2. 设置 Access Key
 export ACCESS_KEY="fp_xxx"

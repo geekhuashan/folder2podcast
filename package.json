@@ -12,7 +12,6 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx lib/db/migrate.ts",
     "db:studio": "drizzle-kit studio",
-    "create-user": "tsx lib/db/create-user.ts",
     "docs:generate": "next-openapi-gen generate"
   },
   "dependencies": {

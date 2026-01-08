@@ -165,20 +165,7 @@ export default function AccessKeyInput() {
               请输入 Access Key
             </Box>
             <Box sx={{ mb: 2, fontSize: '0.75rem', color: 'text.secondary' }}>
-              使用{' '}
-              <Box
-                component="code"
-                sx={{
-                  p: '2px 6px',
-                  bgcolor: 'action.hover',
-                  borderRadius: 0.5,
-                  fontFamily: 'monospace',
-                  fontSize: '0.6875rem',
-                }}
-              >
-                npm run create-user
-              </Box>{' '}
-              创建用户
+              通过用户名/密码登录获取 Access Key，或在开放注册模式下注册新账号
             </Box>
             <TextField
               value={key}
