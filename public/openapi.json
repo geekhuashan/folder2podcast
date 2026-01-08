@@ -1237,6 +1237,35 @@
         }
       }
     },
+    "/v1/podcasts/{username}/{dirName}/inheritance": {
+      "put": {
+        "operationId": "put-v1-podcasts-{username}-{dirName}-inheritance",
+        "summary": "切换播客的继承开关",
+        "description": "启用/禁用剧集继承,批量更新剧集数据",
+        "tags": [
+          "V1"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/200 - SuccessResponse - 更新成功"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
     "/v1/podcasts/{username}/{dirName}/episodes/{episodeId}": {
       "put": {
         "operationId": "put-v1-podcasts-{username}-{dirName}-episodes-{episodeId}",

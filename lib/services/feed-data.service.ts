@@ -8,6 +8,7 @@ import {
   getEpisodeCoverUrl,
   getRssFeedUrl,
   getPodcastDetailUrl,
+  getCoverUrl,
 } from '@/lib/utils/url';
 import { getUserById } from '@/lib/db/queries';
 
@@ -142,13 +143,10 @@ export async function generatePodcastFeedData(
   };
 
   const feedEpisodes: FeedEpisode[] = episodeRecords.map(ep => {
-    // 应用继承逻辑：如果播客启用了继承，且剧集没有封面，则使用播客封面
-    const shouldInheritCover = podcast.inheritanceEnabled && !ep.coverFileName;
-
     return {
       id: ep.id,
       title: ep.title,
-      description: ep.description,
+      description: ep.description,  // ✅ 直接使用，数据库中已确保不为 null
       pubDate: ep.pubDate,
       duration: ep.duration,
       fileSize: ep.fileSize,
@@ -157,11 +155,7 @@ export async function generatePodcastFeedData(
       createdAt: ep.createdAt,
       updatedAt: ep.updatedAt,
       audioUrl: getAudioUrl(podcast.userId, podcast.dirName, ep.fileName),
-      imageUrl: shouldInheritCover
-        ? getPodcastCoverUrl(podcast.userId, podcast.dirName)
-        : ep.coverFileName
-        ? getEpisodeCoverUrl(podcast.userId, podcast.dirName, ep.coverFileName)
-        : getPodcastCoverUrl(podcast.userId, podcast.dirName),
+      imageUrl: getCoverUrl(podcast.userId, podcast.dirName, ep.coverFileName), // ✅ 直接使用，无需判断
     };
   });
 

@@ -185,3 +185,46 @@ export function extractAudioFileNameFromCover(coverFileName: string): string | n
   const match = coverFileName.match(storageConfig.episodeCoverPattern);
   return match ? match[1] : null;
 }
+
+/**
+ * 统一的封面 URL 生成函数
+ *
+ * @param userId - 用户 ID
+ * @param podcastDir - 播客目录名
+ * @param coverFileName - 封面文件名
+ * @returns 封面的完整 URL
+ *
+ * @description
+ * 根据 coverFileName 判断封面类型：
+ * - 'cover.jpg'/'cover.png'/'cover.webp'/'cover.jpeg' → 播客封面 URL
+ * - 'ep-xxx.jpg' → 剧集封面 URL
+ *
+ * @example
+ * ```ts
+ * getCoverUrl('user123', 'my-podcast', 'cover.jpg')
+ * // => 'http://localhost:3000/api/audio/user123/my-podcast/cover'
+ *
+ * getCoverUrl('user123', 'my-podcast', 'ep-episode01.jpg')
+ * // => 'http://localhost:3000/api/audio/user123/my-podcast/ep-episode01.jpg'
+ * ```
+ */
+export function getCoverUrl(
+  userId: string,
+  podcastDir: string,
+  coverFileName: string
+): string {
+  // 判断是否为播客封面文件名
+  const isPodcastCover =
+    coverFileName === 'cover.jpg' ||
+    coverFileName === 'cover.png' ||
+    coverFileName === 'cover.webp' ||
+    coverFileName === 'cover.jpeg';
+
+  if (isPodcastCover) {
+    // 播客封面 URL: /api/audio/{userId}/{dirName}/cover
+    return getPodcastCoverUrl(userId, podcastDir);
+  }
+
+  // 剧集封面 URL: /api/audio/{userId}/{dirName}/ep-{fileName}
+  return getEpisodeCoverUrl(userId, podcastDir, coverFileName);
+}

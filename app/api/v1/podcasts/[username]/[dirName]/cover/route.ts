@@ -12,6 +12,10 @@ import { getLocalPath, getPodcastCoverUrl } from '@/lib/utils/url';
 import { getPodcastByUserAndDir, getUserByUsername } from '@/lib/db/queries';
 import { writeFile, unlink } from 'fs/promises';
 import { join } from 'path';
+import { copyDefaultCoverToPodcast, copyPodcastCoverToEpisode } from '@/lib/utils/cover';
+import { db } from '@/lib/db';
+import { episodes } from '@/lib/db/schema';
+import { eq } from 'drizzle-orm';
 
 /**
  * 上传播客封面
@@ -127,6 +131,26 @@ export async function POST(
 
     console.log(`[POST Podcast Cover] Saved cover: ${coverPath}`);
 
+    // 如果启用继承，批量更新所有剧集封面
+    if (podcast.inheritanceEnabled) {
+      try {
+        const allEpisodes = await db.select()
+          .from(episodes)
+          .where(eq(episodes.podcastId, podcast.id))
+          .all();
+
+        for (const ep of allEpisodes) {
+          // 用新的播客封面覆盖剧集封面
+          await copyPodcastCoverToEpisode(podcast.userId, podcast.dirName, ep.id);
+        }
+
+        console.log(`[POST Podcast Cover] Updated ${allEpisodes.length} episode covers`);
+      } catch (err) {
+        console.error('[POST Podcast Cover] Failed to update episode covers:', err);
+        // 不阻塞主流程
+      }
+    }
+
     // 清除 Feed 缓存
     clearFeedCache(podcast.id);
 
@@ -214,11 +238,36 @@ export async function DELETE(
       }
     }
 
-    if (!deleted) {
+    // 还原为默认封面
+    try {
+      await copyDefaultCoverToPodcast(podcast.userId, podcast.dirName);
+      console.log(`[DELETE Podcast Cover] Restored default cover for ${podcast.dirName}`);
+    } catch (err) {
+      console.error('[DELETE Podcast Cover] Failed to restore default cover:', err);
       return jsonResponse(
-        fail({ cover: 'Podcast has no cover to delete' }),
-        HTTP_STATUS.BAD_REQUEST
+        error('Failed to restore default cover', HTTP_STATUS.INTERNAL_SERVER_ERROR),
+        HTTP_STATUS.INTERNAL_SERVER_ERROR
       );
+    }
+
+    // 如果启用继承，批量更新所有剧集封面
+    if (podcast.inheritanceEnabled) {
+      try {
+        const allEpisodes = await db.select()
+          .from(episodes)
+          .where(eq(episodes.podcastId, podcast.id))
+          .all();
+
+        for (const ep of allEpisodes) {
+          // 用新的默认封面覆盖剧集封面
+          await copyPodcastCoverToEpisode(podcast.userId, podcast.dirName, ep.id);
+        }
+
+        console.log(`[DELETE Podcast Cover] Updated ${allEpisodes.length} episode covers`);
+      } catch (err) {
+        console.error('[DELETE Podcast Cover] Failed to update episode covers:', err);
+        // 不阻塞主流程
+      }
     }
 
     // 清除 Feed 缓存
@@ -226,7 +275,7 @@ export async function DELETE(
 
     return jsonResponse(
       success({
-        message: 'Cover deleted successfully',
+        message: 'Cover deleted and restored to default',
       }),
       HTTP_STATUS.OK
     );

@@ -116,6 +116,16 @@ export async function PUT(
 
     const validatedData = parseResult.data;
 
+    // 【新增】检查继承设置
+    if (podcast.inheritanceEnabled && validatedData.description !== undefined) {
+      return jsonResponse(
+        fail({
+          description: 'Cannot edit episode description when inheritance is enabled. Please disable inheritance first.'
+        }),
+        HTTP_STATUS.BAD_REQUEST
+      );
+    }
+
     // 构建更新对象，只包含实际提供的字段
     const updateData: Record<string, any> = {
       updatedAt: new Date(),

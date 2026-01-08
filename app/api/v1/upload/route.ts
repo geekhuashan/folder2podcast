@@ -12,6 +12,7 @@ import { isAudioFile, extractMetadataFromBuffer } from '@/lib/utils/audio';
 import { clearFeedCache } from '@/lib/services/feed-data.service';
 import { UploadAudioResponse } from '@/lib/schemas/podcast';
 import { storageConfig } from '@/lib/config';
+import { hasPodcastCover, copyDefaultCoverToPodcast, copyPodcastCoverToEpisode } from '@/lib/utils/cover';
 
 // 导出 schemas 供 OpenAPI 生成器使用
 export { UploadAudioResponse };
@@ -152,20 +153,60 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 11. 创建数据库记录
+    // 11. 确保播客有封面（如果没有，复制默认封面）
+    try {
+      if (!await hasPodcastCover(podcast.userId, podcast.dirName)) {
+        await copyDefaultCoverToPodcast(podcast.userId, podcast.dirName);
+        console.log(`[POST Upload] Initialized default cover for ${podcast.dirName}`);
+      }
+    } catch (err) {
+      console.error('[POST Upload] Failed to check/initialize podcast cover:', err);
+      // 不阻塞上传流程
+    }
+
+    // 12. 创建数据库记录
     try {
       const episodeId = uuidv4();
+
+      // 应用写时继承逻辑
+      let episodeDescription: string;
+
+      if (podcast.inheritanceEnabled) {
+        // 启用继承: 优先用元数据,否则用播客描述
+        episodeDescription = metadata.album || metadata.artist || podcast.description || '';
+      } else {
+        // 禁用继承: 仅使用元数据
+        episodeDescription = metadata.album || metadata.artist || '';
+      }
+
+      // 为每个剧集创建独立的封面文件（复制播客封面）
+      let episodeCoverFileName: string;
+      try {
+        episodeCoverFileName = await copyPodcastCoverToEpisode(
+          podcast.userId,
+          podcast.dirName,
+          episodeId
+        );
+        console.log(`[POST Upload] Created episode cover: ${episodeCoverFileName}`);
+      } catch (err) {
+        console.error('[POST Upload] Failed to create episode cover:', err);
+        // 失败时使用播客封面作为兜底
+        episodeCoverFileName = 'cover.jpg';
+      }
+
       await db.insert(episodes).values({
         id: episodeId,
         podcastId: podcastId,
         fileName: finalFileName,  // 使用最终的文件名
         fileSize: file.size,
         title: metadata.title || finalFileName,
-        description: metadata.album || metadata.artist || '',
+        description: episodeDescription,      // ✅ 不允许为 null
         pubDate: new Date(),
         duration: metadata.duration || 0,
+        coverFileName: episodeCoverFileName,  // ✅ 统一格式：ep-{episodeId}.jpg
       });
-      console.log(`[POST /api/v1/upload] Episode created: ${episodeId}`);
+
+      console.log(`[POST /api/v1/upload] Episode created: ${episodeId} (inheritanceEnabled: ${podcast.inheritanceEnabled}, description: "${episodeDescription.substring(0, 50)}", coverFileName: ${episodeCoverFileName})`);
     } catch (err) {
       console.error('[POST /api/v1/upload] Failed to create episode record:', err);
       // 文件已保存，数据库记录创建失败
@@ -175,10 +216,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 10. 清除缓存
+    // 13. 清除缓存
     clearFeedCache(podcastId);
 
-    // 11. 返回成功响应
+    // 14. 返回成功响应
     return jsonResponse(
       success({
         fileName: finalFileName,  // 使用最终的文件名

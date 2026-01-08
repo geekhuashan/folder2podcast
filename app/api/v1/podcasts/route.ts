@@ -12,6 +12,7 @@ import { mkdir } from 'fs/promises';
 import { getLocalPath } from '@/lib/utils/url';
 import { CreatePodcastRequest, PodcastWithFeedUrl } from '@/lib/schemas/podcast';
 import { z } from 'zod';
+import { copyDefaultCoverToPodcast } from '@/lib/utils/cover';
 
 // 导出 schemas 供 OpenAPI 生成器使用
 export { CreatePodcastRequest, PodcastWithFeedUrl };
@@ -156,14 +157,23 @@ export async function POST(request: NextRequest) {
       .returning()
       .get();
 
-    // 7. 获取用户名以生成 Feed URL
+    // 7. 复制默认封面到播客目录
+    try {
+      await copyDefaultCoverToPodcast(auth.userId, newPodcast.dirName);
+      console.log(`[POST Podcast] Default cover initialized for ${newPodcast.dirName}`);
+    } catch (err) {
+      console.error('[POST Podcast] Failed to initialize default cover:', err);
+      // 不阻塞整个流程
+    }
+
+    // 8. 获取用户名以生成 Feed URL
     const user = await getUserById(auth.userId);
     if (!user) {
       logger.logWarning(HTTP_STATUS.NOT_FOUND, 'User not found');
       return jsonResponse(error('User not found', HTTP_STATUS.NOT_FOUND), HTTP_STATUS.NOT_FOUND);
     }
 
-    // 8. 返回成功响应
+    // 9. 返回成功响应
     logger.logSuccess(HTTP_STATUS.CREATED, `Podcast created: ${newPodcast.dirName} (${newPodcast.id})`);
     return jsonResponse(
       success({

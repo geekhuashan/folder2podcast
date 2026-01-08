@@ -10,6 +10,7 @@ import { rm, rename } from 'fs/promises';
 import { getLocalPath } from '@/lib/utils/url';
 import { join } from 'path';
 import { getPodcastByUserAndDir, getUserByUsername } from '@/lib/db/queries';
+import { copyPodcastCoverToEpisode } from '@/lib/utils/cover';
 import {
   UpdatePodcastRequest,
   PodcastDetailResponse,
@@ -196,6 +197,49 @@ export async function PUT(
       .where(eq(podcasts.id, podcast.id))
       .returning()
       .get();
+
+    // 【新增】检测 description 是否被修改
+    const descriptionChanged = validatedData.description !== undefined
+      && validatedData.description !== podcast.description;
+
+    // 【新增】如果启用继承且 description 被修改,同步到剧集
+    if (descriptionChanged && podcast.inheritanceEnabled) {
+      // 批量更新所有剧集的 description（因为启用继承时，所有剧集都应该用播客的描述）
+      const syncResult = await db.update(episodesTable)
+        .set({
+          description: updated.description || '',
+          updatedAt: new Date(),
+        })
+        .where(eq(episodesTable.podcastId, podcast.id))
+        .returning();
+
+      console.log(`[PUT Podcast] Synced description to ${syncResult.length} episodes (inheritanceEnabled: true)`);
+    }
+
+    // 【新增】检测 inheritanceEnabled 是否从 false → true
+    const inheritanceEnabled = validatedData.inheritanceEnabled !== undefined
+      && validatedData.inheritanceEnabled === true
+      && podcast.inheritanceEnabled === false;
+
+    // 【新增】如果启用继承（false → true），批量更新所有剧集封面
+    if (inheritanceEnabled) {
+      try {
+        const allEpisodes = await db.select()
+          .from(episodesTable)
+          .where(eq(episodesTable.podcastId, podcast.id))
+          .all();
+
+        for (const ep of allEpisodes) {
+          // 用播客封面覆盖剧集封面
+          await copyPodcastCoverToEpisode(podcast.userId, podcast.dirName, ep.id);
+        }
+
+        console.log(`[PUT Podcast] Updated ${allEpisodes.length} episode covers (inheritance enabled: false → true)`);
+      } catch (err) {
+        console.error('[PUT Podcast] Failed to update episode covers:', err);
+        // 不阻塞主流程
+      }
+    }
 
     // 清除 Feed 缓存（任何更新都需要清除缓存）
     clearFeedCache(podcast.id);

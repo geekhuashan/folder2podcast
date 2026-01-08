@@ -95,6 +95,16 @@ export async function POST(
       );
     }
 
+    // 【新增】检查继承设置
+    if (podcast.inheritanceEnabled) {
+      return jsonResponse(
+        fail({
+          inheritance: 'Cannot upload episode cover when inheritance is enabled. Please disable inheritance first.'
+        }),
+        HTTP_STATUS.BAD_REQUEST
+      );
+    }
+
     // 解析表单数据
     const formData = await request.formData();
     const file = formData.get('file') as File;
@@ -252,6 +262,16 @@ export async function DELETE(
       return jsonResponse(
         fail({ episodeId: 'Episode not found' }),
         HTTP_STATUS.NOT_FOUND
+      );
+    }
+
+    // 【新增】检查继承设置
+    if (podcast.inheritanceEnabled) {
+      return jsonResponse(
+        fail({
+          inheritance: 'Cannot delete episode cover when inheritance is enabled. Please disable inheritance first.'
+        }),
+        HTTP_STATUS.BAD_REQUEST
       );
     }
 
