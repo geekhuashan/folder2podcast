@@ -75,7 +75,9 @@ Control title display through global environment variables or per-podcast config
   "category": "Technology",
   "explicit": false,
   "websiteUrl": "https://example.com",
-  "titleFormat": "clean"
+  "titleFormat": "clean",
+  "coverSearchTerm": "search term for fetching cover (optional)",
+  "coverImageUrl": "direct image URL for cover (optional, highest priority)"
 }
 ```
 

@@ -13,6 +13,20 @@ export interface EnvConfig {
     // title: only episode title
     // full: include file info + links + attachments (pdf/etc) when available
     EPISODE_SHOWNOTES: 'title' | 'full';
+    // Inline attachments in show notes HTML (content:encoded).
+    // none: link only
+    // images: inline images only
+    // all: inline images + text (md/txt)
+    EPISODE_INLINE_ATTACHMENTS: 'none' | 'images' | 'all';
+    // Max chars to inline from a .md/.txt attachment (rest is linked).
+    EPISODE_INLINE_TEXT_MAX_CHARS: number;
+
+    // Remote cover fetching (best-effort). Cached under process.cwd()/.covers
+    REMOTE_COVER_ENABLED: boolean;
+    REMOTE_COVER_PROVIDER: 'none' | 'itunes';
+    REMOTE_COVER_COUNTRY: string;
+    REMOTE_COVER_TTL_DAYS: number;
+    REMOTE_COVER_TIMEOUT_MS: number;
 }
 
 /**
@@ -37,6 +51,14 @@ export function getEnvConfig(): EnvConfig {
         // 服务器基础URL，默认为 http://localhost:端口号
         BASE_URL: process.env.BASE_URL || defaultBaseUrl,
         // Shownotes verbosity. Default to full to include richer info.
-        EPISODE_SHOWNOTES: (process.env.EPISODE_SHOWNOTES as 'title' | 'full') || 'full'
+        EPISODE_SHOWNOTES: (process.env.EPISODE_SHOWNOTES as 'title' | 'full') || 'full',
+        EPISODE_INLINE_ATTACHMENTS: (process.env.EPISODE_INLINE_ATTACHMENTS as 'none' | 'images' | 'all') || 'all',
+        EPISODE_INLINE_TEXT_MAX_CHARS: parseInt(process.env.EPISODE_INLINE_TEXT_MAX_CHARS || '8000', 10),
+
+        REMOTE_COVER_ENABLED: (process.env.REMOTE_COVER_ENABLED || 'true').toLowerCase() === 'true',
+        REMOTE_COVER_PROVIDER: (process.env.REMOTE_COVER_PROVIDER as 'none' | 'itunes') || 'itunes',
+        REMOTE_COVER_COUNTRY: process.env.REMOTE_COVER_COUNTRY || 'cn',
+        REMOTE_COVER_TTL_DAYS: parseInt(process.env.REMOTE_COVER_TTL_DAYS || '30', 10),
+        REMOTE_COVER_TIMEOUT_MS: parseInt(process.env.REMOTE_COVER_TIMEOUT_MS || '8000', 10)
     };
 }

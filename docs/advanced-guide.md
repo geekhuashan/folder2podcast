@@ -58,6 +58,8 @@
   "explicit": false,
   "websiteUrl": "https://example.com",
   "titleFormat": "clean",
+  "coverSearchTerm": "用于抓取封面的搜索关键词（可选）",
+  "coverImageUrl": "封面图片直链（可选，优先级最高）",
   "useMTime": false
 }
 ```

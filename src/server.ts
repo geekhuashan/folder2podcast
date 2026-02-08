@@ -6,6 +6,7 @@ import { processPodcastSource } from './utils/scanner';
 import { generateFeed, getFeedStoragePath } from './utils/feed';
 import { getEnvConfig } from './utils/env';
 import fs from 'fs-extra';
+import { resolveCoverForSource } from './utils/cover';
 
 // 设置默认封面路径为assets中的图片
 const DEFAULT_COVER = '/image/default-cover.png';
@@ -29,7 +30,7 @@ export class PodcastServer {
 
     private formatPodcastInfo(source: PodcastSource): string {
         const episodeCount = source.episodes.length;
-        const coverInfo = source.coverPath ? '✓' : '✗';
+        const coverInfo = source.coverPath || source.coverUrl ? '✓' : '✗';
 
         return `
   ${source.config.title}
@@ -71,6 +72,17 @@ export class PodcastServer {
             const source = await processPodcastSource(
                 path.join(this.audioDir, dir)
             );
+
+            // Resolve cover (local cover.jpg or remote cached cover under .covers)
+            if (source.coverPath) {
+                source.coverUrl = `/audio/${encodeURIComponent(source.dirName)}/cover.jpg`;
+            } else {
+                const resolved = await resolveCoverForSource(source);
+                if (resolved.coverUrl) {
+                    source.coverUrl = resolved.coverUrl;
+                }
+            }
+
             this.sources.set(dir, source);
 
             // 生成并保存feed文件到新的存储位置
@@ -104,6 +116,15 @@ export class PodcastServer {
                 decorateReply: false
             });
 
+            // Remote cover cache dir (served as static files)
+            const coversDir = path.join(process.cwd(), '.covers');
+            await fs.ensureDir(coversDir);
+            await this.server.register(fastifyStatic, {
+                root: coversDir,
+                prefix: '/covers/',
+                decorateReply: false
+            });
+
             // 注册音频文件的静态服务
             await this.server.register(fastifyStatic, {
                 root: this.audioDir,
@@ -120,9 +141,7 @@ export class PodcastServer {
                     title: source.config.title,
                     description: source.config.description,
                     dirName: source.dirName,
-                    coverUrl: source.coverPath
-                        ? `/audio/${encodeURIComponent(source.dirName)}/cover.jpg`
-                        : DEFAULT_COVER,
+                    coverUrl: source.coverUrl || DEFAULT_COVER,
                     feedUrl: `/feeds/${encodeURIComponent(source.dirName)}.xml`,
                     episodeCount: source.episodes.length,
                     latestEpisodeDate: source.episodes.length > 0

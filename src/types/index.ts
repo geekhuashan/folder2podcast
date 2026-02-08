@@ -25,6 +25,9 @@ export interface PodcastConfig {
     titleFormat?: 'clean' | 'full';  // 标题显示策略：clean=清理后的标题，full=完整文件名
     episodeNumberStrategy?: EpisodeNumberStrategy;  // 可选：序号提取策略
     useMTime?: boolean;  // 是否使用文件的创建时间作为发布时间
+    // Optional: remote cover fetch overrides
+    coverSearchTerm?: string;
+    coverImageUrl?: string;
 }
 
 export interface PodcastSource {
@@ -33,6 +36,8 @@ export interface PodcastSource {
     config: Required<PodcastConfig>;
     episodes: Episode[];
     coverPath?: string;
+    // Resolved cover URL (route path like /audio/... or /covers/..., or absolute URL).
+    coverUrl?: string;
 }
 
 export interface ProcessOptions {

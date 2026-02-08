@@ -40,20 +40,54 @@ async function findSidecarAttachments(params: {
     audioFileName: string;
     baseUrl: string;
     dirName: string;
-}): Promise<Array<{ fileName: string; url: string }>> {
+    maxTextChars: number;
+}): Promise<Array<{ fileName: string; url: string; kind: 'image' | 'text' | 'pdf' | 'doc' | 'other'; inlineText?: string }>> {
     const { dirPath, audioFileName, baseUrl, dirName } = params;
     const stem = audioFileName.replace(/\.[^/.]+$/, '');
 
     // Common "sidecar" files stored next to audio (notes, slides, PDFs, cover, etc).
-    const exts = ['pdf', 'epub', 'mobi', 'azw3', 'txt', 'md', 'jpg', 'jpeg', 'png', 'webp'];
-    const results: Array<{ fileName: string; url: string }> = [];
+    const exts = ['pdf', 'doc', 'docx', 'epub', 'mobi', 'azw3', 'txt', 'md', 'jpg', 'jpeg', 'png', 'webp'];
+    const results: Array<{ fileName: string; url: string; kind: 'image' | 'text' | 'pdf' | 'doc' | 'other'; inlineText?: string }> = [];
+
+    async function readTextTruncated(fullPath: string, maxChars: number): Promise<string> {
+        try {
+            const stat = await fs.stat(fullPath);
+            if (!stat.isFile()) return '';
+            const maxBytes = Math.max(1024, maxChars * 4); // UTF-8 worst-case-ish
+            const fd = await fs.open(fullPath, 'r');
+            try {
+                const buf = Buffer.allocUnsafe(Math.min(maxBytes, stat.size));
+                const { bytesRead } = await fs.read(fd, buf, 0, buf.length, 0);
+                const s = buf.subarray(0, bytesRead).toString('utf8');
+                return s.length > maxChars ? s.slice(0, maxChars) : s;
+            } finally {
+                await fs.close(fd);
+            }
+        } catch {
+            return '';
+        }
+    }
 
     for (const ext of exts) {
         const candidate = `${stem}.${ext}`;
         const fullPath = path.join(dirPath, candidate);
         if (await fs.pathExists(fullPath)) {
             const url = `${baseUrl}/audio/${encodeURIComponent(dirName)}/${encodeURIComponent(candidate)}`;
-            results.push({ fileName: candidate, url });
+            let kind: 'image' | 'text' | 'pdf' | 'doc' | 'other' = 'other';
+            if (['jpg', 'jpeg', 'png', 'webp'].includes(ext)) kind = 'image';
+            else if (['md', 'txt'].includes(ext)) kind = 'text';
+            else if (ext === 'pdf') kind = 'pdf';
+            else if (['doc', 'docx'].includes(ext)) kind = 'doc';
+
+            const item: { fileName: string; url: string; kind: 'image' | 'text' | 'pdf' | 'doc' | 'other'; inlineText?: string } = {
+                fileName: candidate,
+                url,
+                kind
+            };
+            if (kind === 'text') {
+                item.inlineText = await readTextTruncated(fullPath, params.maxTextChars);
+            }
+            results.push(item);
         }
     }
 
@@ -89,8 +123,10 @@ async function buildEpisodeShownotes(params: {
     fileSizeBytes: number;
     baseUrl: string;
     defaultMode: 'title' | 'full';
+    inlineAttachments: 'none' | 'images' | 'all';
+    inlineTextMaxChars: number;
 }): Promise<{ plain: string; html: string }> {
-    const { source, episode, episodeUrl, fileSizeBytes, baseUrl, defaultMode } = params;
+    const { source, episode, episodeUrl, fileSizeBytes, baseUrl, defaultMode, inlineAttachments, inlineTextMaxChars } = params;
     const { config, dirName, dirPath } = source;
 
     if (defaultMode === 'title') {
@@ -101,7 +137,8 @@ async function buildEpisodeShownotes(params: {
         dirPath,
         audioFileName: episode.fileName,
         baseUrl,
-        dirName
+        dirName,
+        maxTextChars: inlineTextMaxChars
     });
 
     const lines: string[] = [];
@@ -132,6 +169,34 @@ async function buildEpisodeShownotes(params: {
     }
     htmlParts.push('</ul>');
 
+    // Inline attachments (client-dependent: images and simple text are the most compatible).
+    if (attachments.length && inlineAttachments !== 'none') {
+        const images = attachments.filter(a => a.kind === 'image');
+        const texts = attachments.filter(a => a.kind === 'text');
+
+        if (images.length && (inlineAttachments === 'images' || inlineAttachments === 'all')) {
+            htmlParts.push('<hr/><p><strong>Images</strong></p>');
+            for (const img of images) {
+                htmlParts.push(
+                    `<p><a href="${escapeHtml(img.url)}"><img src="${escapeHtml(img.url)}" alt="${escapeHtml(img.fileName)}" style="max-width:100%;height:auto;"/></a></p>`
+                );
+            }
+        }
+
+        if (texts.length && inlineAttachments === 'all') {
+            htmlParts.push('<hr/><p><strong>Notes</strong></p>');
+            for (const t of texts) {
+                const body = (t.inlineText || '').trim();
+                if (!body) {
+                    htmlParts.push(`<p><a href="${escapeHtml(t.url)}">${escapeHtml(t.fileName)}</a></p>`);
+                    continue;
+                }
+                htmlParts.push(`<p><a href="${escapeHtml(t.url)}">${escapeHtml(t.fileName)}</a></p>`);
+                htmlParts.push(`<pre>${escapeHtml(body)}</pre>`);
+            }
+        }
+    }
+
     return { plain: lines.join('\n'), html: htmlParts.join('') };
 }
 
@@ -140,11 +205,16 @@ export async function generateFeed(source: PodcastSource, options: ProcessOption
     const { baseUrl, defaultCover } = options;
     const env = getEnvConfig();
     const shownotesMode = env.EPISODE_SHOWNOTES || 'full';
+    const inlineAttachments = env.EPISODE_INLINE_ATTACHMENTS || 'all';
+    const inlineTextMaxChars = Number.isFinite(env.EPISODE_INLINE_TEXT_MAX_CHARS) && env.EPISODE_INLINE_TEXT_MAX_CHARS > 0
+        ? env.EPISODE_INLINE_TEXT_MAX_CHARS
+        : 8000;
 
-    // 使用封面图片或默认封面
-    const feedImage = coverPath
-        ? `${baseUrl}/audio/${encodeURIComponent(path.basename(source.dirPath))}/cover.jpg`
-        : defaultCover;
+    // Use resolved cover URL (local cover.jpg or remote cached cover), or fallback to default cover.
+    const rawCover = source.coverUrl;
+    const feedImage = rawCover
+        ? (rawCover.startsWith('http://') || rawCover.startsWith('https://') ? rawCover : `${baseUrl}${rawCover}`)
+        : (coverPath ? `${baseUrl}/audio/${encodeURIComponent(path.basename(source.dirPath))}/cover.jpg` : defaultCover);
 
     // 获取最新一集的日期作为Feed更新时间
     const latestEpisode = episodes[episodes.length - 1];
@@ -231,7 +301,9 @@ export async function generateFeed(source: PodcastSource, options: ProcessOption
             episodeUrl,
             fileSizeBytes: fileSize,
             baseUrl,
-            defaultMode: shownotesMode
+            defaultMode: shownotesMode,
+            inlineAttachments,
+            inlineTextMaxChars
         });
 
         feed.addItem({
