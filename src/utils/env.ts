@@ -9,6 +9,10 @@ export interface EnvConfig {
     TITLE_FORMAT: 'clean' | 'full';
     // 服务器基础URL，用于生成RSS feed中的链接
     BASE_URL: string;
+    // Episode shownotes verbosity
+    // title: only episode title
+    // full: include file info + links + attachments (pdf/etc) when available
+    EPISODE_SHOWNOTES: 'title' | 'full';
 }
 
 /**
@@ -31,6 +35,8 @@ export function getEnvConfig(): EnvConfig {
         // 标题显示策略，默认为full（完整文件名，不含扩展名）
         TITLE_FORMAT: (process.env.TITLE_FORMAT as 'clean' | 'full') || 'full',
         // 服务器基础URL，默认为 http://localhost:端口号
-        BASE_URL: process.env.BASE_URL || defaultBaseUrl
+        BASE_URL: process.env.BASE_URL || defaultBaseUrl,
+        // Shownotes verbosity. Default to full to include richer info.
+        EPISODE_SHOWNOTES: (process.env.EPISODE_SHOWNOTES as 'title' | 'full') || 'full'
     };
 }
