@@ -37,7 +37,9 @@ ENV NODE_ENV=production \
 # 创建启动脚本
 RUN printf '%s\n' \
     '#!/bin/sh' \
-    'chown -R $PUID:$PGID /app/dist /app/node_modules /app/assets /podcasts' \
+    '# Best-effort chown: /podcasts is commonly mounted read-only.' \
+    'chown -R $PUID:$PGID /app/dist /app/node_modules /app/assets 2>/dev/null || true' \
+    'if [ -w /podcasts ]; then chown -R $PUID:$PGID /podcasts 2>/dev/null || true; fi' \
     'exec node dist/index.js' \
     > /entrypoint.sh && \
     chmod +x /entrypoint.sh
