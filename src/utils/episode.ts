@@ -6,9 +6,10 @@ import fs from 'fs';
 const BASE_DATE = new Date('2024-12-18T00:00:00.000Z');
 
 // 从文件名开头部分匹配数字
+// 支持 001-标题 / 01｜标题 / 05加餐 / ly01 标题 等（含全角分隔符）
 function findPrefixNumber(fileName: string): number | null {
-    // 匹配前缀部分中的数字（允许前面有字母）
-    const match = fileName.match(/^[^0-9]*?(\d+)(?=[-_.\s])/);
+    // 允许数字后接常见分隔符、全角符号、或直接中文/字母（如「05加餐」）
+    const match = fileName.match(/^[^0-9]*?(\d+)(?=[-_.\s|｜：:、．.·—\-]|[\u4e00-\u9fffA-Za-z]|$)/);
     return match ? parseInt(match[1], 10) : null;
 }
 
@@ -26,9 +27,9 @@ function findSuffixNumber(fileName: string): number | null {
 
 // 从左到右找第一个数字（配置策略）
 function findFirstNumber(fileName: string): number | null {
-    // 检查文件名前30个字符
-    const prefix = fileName.substring(0, 30);
-    const match = prefix.match(/^[^0-9]*?(\d+)(?=[-_.\s])/);
+    // 检查文件名前40个字符，与 prefix 策略一致，兼容全角分隔符
+    const prefix = fileName.substring(0, 40);
+    const match = prefix.match(/^[^0-9]*?(\d+)(?=[-_.\s|｜：:、．.·—\-]|[\u4e00-\u9fffA-Za-z]|$)/);
     if (match) {
         return parseInt(match[1], 10);
     }
@@ -108,9 +109,17 @@ export function parseEpisodeTitle(fileName: string): string {
 }
 
 export function generatePubDate(episodeNumber: number): Date {
-    // 根据剧集编号增加天数
+    // 按序号递增日期：0/1/2... 各隔至少 1 天，便于客户端 Oldest 排序
     const pubDate = new Date(BASE_DATE);
-    pubDate.setDate(BASE_DATE.getDate() + episodeNumber - 1);
+    const offset = Math.max(0, episodeNumber);
+    pubDate.setUTCDate(pubDate.getUTCDate() + offset);
+    return pubDate;
+}
+
+/** 按最终排序后的下标生成严格递增的发布时间（保证 1 天间隔） */
+export function generateSequentialPubDate(index: number, baseDate: Date = BASE_DATE): Date {
+    const pubDate = new Date(baseDate);
+    pubDate.setUTCDate(pubDate.getUTCDate() + Math.max(0, index));
     return pubDate;
 }
 

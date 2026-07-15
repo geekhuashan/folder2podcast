@@ -2,7 +2,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import { Episode, PodcastSource, PodcastConfig } from '../types';
 import { readConfig, getConfigWithDefaults, validateConfig } from './config';
-import { createEpisode, validateFileName, parseEpisodeNumber } from './episode';
+import { createEpisode, validateFileName, parseEpisodeNumber, generateSequentialPubDate } from './episode';
 
 export async function validatePodcastDirectory(dirPath: string): Promise<void> {
     // 只检查目录是否存在
@@ -29,11 +29,12 @@ export function sortEpisodes(episodes: Episode[], config?: Required<PodcastConfi
         return [...episodes].sort((a, b) => a.pubDate.getTime() - b.pubDate.getTime());
     }
 
-    // 有序号的按序号排序
+    // 有序号的按序号排序；同序号再按文件名，保证 05加餐 / 05｜问答 稳定顺序
     numberedEpisodes.sort((a, b) => {
-        const aNumber = numberCache.get(a.fileName);
-        const bNumber = numberCache.get(b.fileName);
-        return (aNumber || 0) - (bNumber || 0);
+        const aNumber = numberCache.get(a.fileName) ?? 0;
+        const bNumber = numberCache.get(b.fileName) ?? 0;
+        if (aNumber !== bNumber) return aNumber - bNumber;
+        return a.fileName.localeCompare(b.fileName, 'zh');
     });
 
     // 无序号的按时间排序
@@ -66,7 +67,12 @@ export async function scanAudioFiles(dirPath: string, config: Required<PodcastCo
         }
     }
 
-    return sortEpisodes(episodes, config);
+    const sorted = sortEpisodes(episodes, config);
+    // 最终按列表顺序写入递增 pubDate（每天一集），客户端按 Oldest 即课程顺序
+    return sorted.map((episode, index) => ({
+        ...episode,
+        pubDate: generateSequentialPubDate(index)
+    }));
 }
 
 export async function processPodcastSource(dirPath: string): Promise<PodcastSource> {

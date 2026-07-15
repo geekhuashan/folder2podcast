@@ -141,15 +141,19 @@ async function buildEpisodeShownotes(params: {
         maxTextChars: inlineTextMaxChars
     });
 
+    // Shownotes: keep short & readable. Enclosure already carries the playable audio URL,
+    // so we do NOT dump the long encoded link here (use short markdown/HTML labels).
     const lines: string[] = [];
     lines.push(episode.title);
     lines.push(`Podcast: ${config.title}`);
     lines.push(`Published: ${formatDate(episode.pubDate)}`);
-    lines.push(`File: ${episode.fileName}`);
     lines.push(`Size: ${formatBytes(fileSizeBytes)}`);
-    lines.push(`Audio: ${episodeUrl}`);
+    // Markdown-style short links (some clients render; others show plain text still short)
+    lines.push(`[播放音频](${episodeUrl})`);
     if (attachments.length) {
-        lines.push(`Attachments: ${attachments.map(a => a.fileName).join(', ')}`);
+        for (const a of attachments) {
+            lines.push(`[附件: ${a.fileName}](${a.url})`);
+        }
     }
 
     const htmlParts: string[] = [];
@@ -157,9 +161,8 @@ async function buildEpisodeShownotes(params: {
     htmlParts.push('<ul>');
     htmlParts.push(`<li><strong>Podcast</strong>: ${escapeHtml(config.title)}</li>`);
     htmlParts.push(`<li><strong>Published</strong>: ${escapeHtml(formatDate(episode.pubDate))}</li>`);
-    htmlParts.push(`<li><strong>File</strong>: ${escapeHtml(episode.fileName)}</li>`);
     htmlParts.push(`<li><strong>Size</strong>: ${escapeHtml(formatBytes(fileSizeBytes))}</li>`);
-    htmlParts.push(`<li><strong>Audio</strong>: <a href="${escapeHtml(episodeUrl)}">${escapeHtml(episodeUrl)}</a></li>`);
+    htmlParts.push(`<li><strong>Audio</strong>: <a href="${escapeHtml(episodeUrl)}">播放音频</a></li>`);
     if (attachments.length) {
         htmlParts.push('<li><strong>Attachments</strong>:<ul>');
         for (const a of attachments) {
