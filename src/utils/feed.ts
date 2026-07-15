@@ -150,7 +150,6 @@ async function buildEpisodeShownotes(params: {
     lines.push(`Size: ${formatBytes(fileSizeBytes)}`);
     // Do NOT embed long URLs in plain text (Snipd etc. show them raw).
     // Playback uses <enclosure>; HTML shownotes use short labels.
-    lines.push('Audio: 点击播放（见本集音频）');
     if (attachments.length) {
         lines.push('Attachments: ' + attachments.map(a => a.fileName).join(', '));
     }
@@ -161,7 +160,6 @@ async function buildEpisodeShownotes(params: {
     htmlParts.push(`<li><strong>Podcast</strong>: ${escapeHtml(config.title)}</li>`);
     htmlParts.push(`<li><strong>Published</strong>: ${escapeHtml(formatDate(episode.pubDate))}</li>`);
     htmlParts.push(`<li><strong>Size</strong>: ${escapeHtml(formatBytes(fileSizeBytes))}</li>`);
-    htmlParts.push(`<li><strong>Audio</strong>: <a href="${escapeHtml(episodeUrl)}">播放音频</a></li>`);
     if (attachments.length) {
         htmlParts.push('<li><strong>Attachments</strong>:<ul>');
         for (const a of attachments) {
@@ -294,7 +292,8 @@ export async function generateFeed(source: PodcastSource, options: ProcessOption
     });
 
     // 添加每个剧集
-    for (const episode of episodes) {
+    for (let episodeIndex = 0; episodeIndex < episodes.length; episodeIndex++) {
+        const episode = episodes[episodeIndex];
         const episodeUrl = `${baseUrl}/audio/${encodeURIComponent(source.dirName)}/${encodeURIComponent(episode.fileName)}`;
         const fileSize = await getFileSize(episode.filePath);
         const shownotes = await buildEpisodeShownotes({
@@ -339,7 +338,9 @@ export async function generateFeed(source: PodcastSource, options: ProcessOption
                         'itunes:summary': shownotes.plain || episode.title,
                         'itunes:duration': '00:00:00',
                         'itunes:explicit': config.explicit ? 'yes' : 'no',
-                        'itunes:episodeType': 'full'
+                        'itunes:episodeType': 'full',
+                        'itunes:episode': String(episodeIndex + 1),
+                        'itunes:season': '1'
                     }
                 }
             ]
