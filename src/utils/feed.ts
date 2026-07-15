@@ -148,12 +148,11 @@ async function buildEpisodeShownotes(params: {
     lines.push(`Podcast: ${config.title}`);
     lines.push(`Published: ${formatDate(episode.pubDate)}`);
     lines.push(`Size: ${formatBytes(fileSizeBytes)}`);
-    // Markdown-style short links (some clients render; others show plain text still short)
-    lines.push(`[播放音频](${episodeUrl})`);
+    // Do NOT embed long URLs in plain text (Snipd etc. show them raw).
+    // Playback uses <enclosure>; HTML shownotes use short labels.
+    lines.push('Audio: 点击播放（见本集音频）');
     if (attachments.length) {
-        for (const a of attachments) {
-            lines.push(`[附件: ${a.fileName}](${a.url})`);
-        }
+        lines.push('Attachments: ' + attachments.map(a => a.fileName).join(', '));
     }
 
     const htmlParts: string[] = [];
