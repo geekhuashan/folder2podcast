@@ -27,9 +27,9 @@ function formatBytes(bytes: number): string {
 }
 
 function formatDate(date: Date): string {
-    // Keep it ISO-ish but readable.
+    // Date only (YYYY-MM-DD). No time/UTC noise in shownotes.
     try {
-        return date.toISOString().replace('T', ' ').replace('Z', ' UTC');
+        return date.toISOString().slice(0, 10);
     } catch {
         return String(date);
     }
